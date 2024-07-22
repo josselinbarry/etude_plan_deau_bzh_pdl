@@ -729,5 +729,5 @@ pe <- pe %>%
               select(identifiant_roe, statut_nom, type_nom, fpi_nom1, usage_nom1, hauteur_chute_etiage),
             join_by('identifiant_roe' == 'identifiant_roe'))
 
-sf::write_sf(obj = pe, dsn = "data/outputs/pe_qualifies_20231202.gpkg")
+sf::write_sf(obj = pe, dsn = "data/outputs/pe_qualifies_20240220.gpkg")
 
