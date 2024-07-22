@@ -1,7 +1,7 @@
 # VERSION FINALISEE AU 20240722
 ## En cours de création
 
-## CREER LES COUCHES ME - SAGE - COMMUNE - BV IPR par agglomérations des données issues de la couche PE
+## CREER LES COUCHES ME - - COMMUNE par synthèse des données issues de la couche PE
 
 # Library ----
 library(tidyverse)
