@@ -1,5 +1,4 @@
 # VERSION FINALISEE AU 20240722
-## En cours de création
 
 ## CREER LES COUCHES ME - - COMMUNE par synthèse des données issues de la couche PE
 
