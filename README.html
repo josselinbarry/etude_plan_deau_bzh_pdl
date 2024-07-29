@@ -359,8 +359,9 @@ Bretagne et Pays de la Loire</h1>
 sur le territoire Bretagne Pays de la Loire.</p>
 <p>En second lieu, étudier les liens de corrélation entre ces variables
 d’implantation territoriales et certaines métriques de qualité.</p>
-<p><strong>1. Un premier script permet de constituer et de qualifier la
-couche plan-d’eau</strong> :</p>
+<div id="un-premier-script-pour-constituer-et-qualifier-la-couche-plan-deau" class="section level2">
+<h2>1. Un premier script pour constituer et qualifier la couche
+plan-d’eau :</h2>
 <ul>
 <li><p>La couche surfaces_elementaires importée dans R a été
 préalablement préparée de la manière suivante :</p>
@@ -451,9 +452,10 @@ ouvrages du ROE et affectation des principales valeurs attributaires des
 ouvrages situées à 20m maximum</li>
 </ul></li>
 </ul>
-<p><strong>2. Un second script permet de constituer et de qualifier les
-couches de territoire (bassin versant des masses d’eau, et
-communes)</strong> :</p>
+</div>
+<div id="un-second-script-pour-constituer-et-qualifier-les-couches-de-territoire-bassin-versant-des-masses-deau-communes-et-bv-ipr" class="section level2">
+<h2>2. Un second script pour constituer et qualifier les couches de
+territoire (bassin versant des masses d’eau, communes et BV IPR) :</h2>
 <p>Les couches de territoires retenues sont les suivantes :</p>
 <p><strong>communes</strong> : couche des communes issue de la BD TOPO
 V3 depuis le flux WFS de l’IGN (<a href="https://data.geopf.fr/wfs/ows?VERSION=2.0.0" class="uri">https://data.geopf.fr/wfs/ows?VERSION=2.0.0</a>)</p>
@@ -588,6 +590,49 @@ d’objets.</p></li>
 débit.</p></li>
 </ul></li>
 </ul>
+</div>
+<div id="analyses-statistiques" class="section level2">
+<h2>3. Analyses statistiques</h2>
+<div id="hypothèses-sur-les-logiques-dimplantation" class="section level3">
+<h3>Hypothèses sur les logiques d’implantation</h3>
+<p>Ce document vise à tester différentes hypothèses sur la logique
+d’implantataion des plans d’eau :</p>
+<ul>
+<li><p>L’implantation des plans d’eau est liée à la
+géologie/lithologie.</p></li>
+<li><p>L’implantation des plans d’eau est liée au régime
+hydrologique.</p></li>
+<li><p>L’implantation des plans d’eau est liée au type de masse d’eau
+(densité plus forte en zone côtière et littorale).</p></li>
+<li><p>L’implantation des plans d’eau est liée à l’activité de
+maraichage.</p></li>
+</ul>
+<p><strong>Script</strong> :</p>
+<p>w_hypotheses_implantation.R</p>
+<p><strong>Rmarkdown</strong> :</p>
+<ul>
+<li><p>hypotheses_implantation.Rmd</p></li>
+<li><p>hypotheses_implantation.html</p></li>
+</ul>
+</div>
+<div id="liens-de-corrélation-entre-pression-plans-deau-et-indice-de-qualité-ipr" class="section level3">
+<h3>Liens de corrélation entre pression plans d’eau et indice de qualité
+IPR :</h3>
+<p>Synthèse de l’analyse sur les liens de corrélation entre les
+indicateurs « plans d’eau » calculés à l’échelle des bassins versants
+des stations IPR et les notes IPR sur ces stations.</p>
+<p><strong>Scripts</strong> :</p>
+<ul>
+<li><p>w_60_statistique_BV_IPR_score_IPR_202406.R</p></li>
+<li><p>w_61_exploit_statistique_BV_IPR_score_IPR.R</p></li>
+</ul>
+<p><strong>Rmarkdown</strong> :</p>
+<ul>
+<li><p>correlation_pression_pe_ipr.Rmd</p></li>
+<li><p>correlation_pression_pe_ipr.html</p></li>
+</ul>
+</div>
+</div>
 </div>
 
 

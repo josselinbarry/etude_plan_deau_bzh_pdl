@@ -4,7 +4,7 @@ Ce projet vise à analyser la structure d’implantation des plans d’eau sur l
 
 En second lieu, étudier les liens de corrélation entre ces variables d’implantation territoriales et certaines métriques de qualité.
 
-**1. Un premier script permet de constituer et de qualifier la couche plan-d’eau** :
+## 1. Un premier script pour constituer et qualifier la couche plan-d’eau :
 
 -	La couche surfaces_elementaires importée dans R a été préalablement préparée de la manière suivante :
     - Téléchargement de la couche **surfaces_elementaires de la BD Topage** : https://www.sandre.eaufrance.fr/atlas/atlas/api/records/7fa4c224-fe38-4e2c-846d-dcc2fa7ef73e 
@@ -46,7 +46,7 @@ En second lieu, étudier les liens de corrélation entre ces variables d’impla
     - **géologie** :  jointure spatiale de la géologie issue de la BD CHARM
     - **distance_roe** (m) : calcul de la distance aux ouvrages du ROE et affectation des principales valeurs attributaires des ouvrages situées à 20m maximum
 
-**2. Un second script permet de constituer et de qualifier les couches de territoire (bassin versant des masses d’eau, et communes)** :
+## 2. Un second script pour constituer et qualifier les couches de territoire (bassin versant des masses d’eau, communes et BV IPR) :
 
 Les couches de territoires retenues sont les suivantes : 
 
@@ -114,3 +114,43 @@ Les couches de territoires retenues sont les suivantes :
     - Somme des longueurs, des surfaces, des volumes et des nombres d'objets.
     
     - Valeurs maximales du rang de Strahler et des valeurs de débit.
+    
+## 3. Analyses statistiques
+
+### Hypothèses sur les logiques d'implantation 
+
+Ce document vise à tester différentes hypothèses sur la logique d'implantataion des plans d'eau :
+
+- L’implantation des plans d’eau est liée à la géologie/lithologie.
+
+- L’implantation des plans d’eau est liée au régime hydrologique.
+
+- L’implantation des plans d’eau est liée au type de masse d’eau (densité plus forte en zone côtière et littorale).
+
+- L’implantation des plans d’eau est liée à l’activité de maraichage.
+
+**Script** : 
+
+w_hypotheses_implantation.R
+
+**Rmarkdown** : 
+
+- hypotheses_implantation.Rmd 
+
+- hypotheses_implantation.html 
+
+### Liens de corrélation entre pression plans d'eau et indice de qualité IPR :
+
+Synthèse de l'analyse sur les liens de corrélation entre les indicateurs « plans d’eau » calculés à l’échelle des bassins versants des stations IPR et les notes IPR sur ces stations.
+
+**Scripts** : 
+
+- w_60_statistique_BV_IPR_score_IPR_202406.R
+
+- w_61_exploit_statistique_BV_IPR_score_IPR.R
+
+**Rmarkdown** : 
+
+- correlation_pression_pe_ipr.Rmd 
+
+- correlation_pression_pe_ipr.html
