@@ -24,9 +24,9 @@ source(file = "R/afficher_carte.R")
 
 load(file = "data/outputs/w_autres_hypotheses.RData")
 ```
-## Cractéristiques générales des surfaces en eau de plans d'eau 
+### Caractéristiques générales des surfaces en eau de plans d'eau 
 
-### Sur zones humides, sur cours, sur nappe, sur source ...
+#### Sur zones humides, sur cours, sur nappe, sur source ...
 
 Voici la répartition des surfaces en eau selon leur lien avec le réseau hydrographique : 
 
@@ -39,7 +39,7 @@ table_tot_pe_alimentation %>%
   kbl() %>%
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), font_size = 12) 
 ```
-### Superficie
+#### Superficie
 
 A l'échelle de la zone d'étude, la distribution de la superficie des surfaces élémentaires de plans d'eau est la suivante :
 
@@ -47,31 +47,31 @@ A l'échelle de la zone d'étude, la distribution de la superficie des surfaces 
 histo_surface_pe
 ```
 
-### Distance au cours d'eau
+#### Distance au cours d'eau
 
 ```{r message=FALSE, warning=FALSE}
 histo_distance_ce_pe
 ```
 
-### Distance à la source
+#### Distance à la source
 
 ```{r message=FALSE, warning=FALSE}
 histo_distance_source_pe
 ```
 
-### Ordination de Strahler
+#### Ordination de Strahler
 
 ```{r message=FALSE, warning=FALSE}
 histo_strahler_pe
 ```
 
-### Proportion du linéaire hydrographique du bassin versant des masses d'eau intercepté par des plans d'eau
+#### Proportion du linéaire hydrographique du bassin versant des masses d'eau intercepté par des plans d'eau
 
 ```{r message=FALSE, warning=FALSE}
 histo_prct_intercept_pe
 ```
 
-### Classes lithologiques des surfaces élémentaires de plans d'eau
+#### Classes lithologiques des surfaces élémentaires de plans d'eau
 
 Voici la carte lithologique simplifiée de la zone d'étude ((c)BRGM).
 
@@ -93,7 +93,7 @@ table_litho_densite_pe %>%
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), font_size = 12) 
 ```
 
-#### Densités selon la lithologie simplifiée
+##### Densités selon la lithologie simplifiée
 
 Nous avons apparié par jointure spatiale la lithologie simplifiée aux surfaces élémentaires de plans d'eau.
 
@@ -123,8 +123,7 @@ De même pour la densité surfacique :
 densite_surfacique_pehm_litho
 ```
 
-
-### Superficie selon la lithologie
+##### Superficie selon la lithologie
 
 Nous avons écarté ici les mares et les marais pour étudier plus spécifiquement la surface des plans d'eau.
 
@@ -138,20 +137,20 @@ Ainsi que la surface médiane selon la lithologie :
 surface_mediane_pehm_litho
 ```
 
-## Deux hypothèses autour de l'implantation des plans d'eau
+### Deux hypothèses autour de l'implantation des plans d'eau
 
 - L'implantation des plans d'eau est-t-elle liée  à la sévérité des étiages ?
 
 - L'implantation des plans d'eau est-t-elle liée au type de masse d'eau (densité plus forte en zone côtière et littorale) ?
 
-### L'implantation des plans d'eau est-elle liée à la "sévérité des étiages" ?
+#### L'implantation des plans d'eau est-elle liée à la "sévérité des étiages" ?
 
 Nous avons décidé, pour tester cette hypothèse, d'étudier l'influence du ratio "débit d'étiage sur le débit du module". 
 Cet indicateur permet en effet de mesurer la vulnérabilité des territoires aux situations d'étiage.  
 
 Nous avons apparié aux plans d'eau les débits moyens QMNA5 et QA, issus des cartes de consensus de l'INRAE (https://webgr.inrae.fr/outils/carte-des-debits).
 
-#### "Sévérité des étiages" (ratio q5/qa) de la zone d'étude
+##### "Sévérité des étiages" (ratio q5/qa) de la zone d'étude
 
 ```{r message=FALSE, warning=FALSE}
 afficher_carte<-function(...){
@@ -182,7 +181,7 @@ repartition_com_rh
 ```
 
 
-### Densité en plans d'eau selon ces classes de ratio de débit :
+##### Densité en plans d'eau selon ces classes de ratio de débit :
 
 Nous avons calculé, à l'échelle du bassin versant des masses d'eau, les densités en plans d'eau en fonction de 4 principales classes de ratio de débit : 
 
@@ -208,7 +207,7 @@ Et de même sans les mares et les marais :
 densite_surfacique_pehm_rh
 ```
 
-### Densité numérique en plans d'eau du bassin versant des masses d'eau selon la 'sévérité de leur étiage' : 
+##### Densité numérique en plans d'eau du bassin versant des masses d'eau selon la 'sévérité de leur étiage' : 
 
 Enfin il nous a paru intéressant de regarder la répartition des densités numériques et surfaciques en plans d'eau (hors mares et marais) du bassin-versant des masses d'eau en fonction de la sévérité de leurs étiages : 
 
@@ -220,21 +219,21 @@ densite_numerique_pehm_rh_bvme_logx
 densite_surfacique_pehm_rh_bvme_logx
 ```
 
-Une analyse statistique de ce lien de corrélation indique cependant (pour les masses d'eau cours d'eau dont la distance de cook est inférieure à 0,01) :
+Une analyse statistique du lien de corrélation entre la densité numérique en plans d'eau (hors mares et marais) et le ratio de débit (étiage et module) montre cependant (pour les masses d'eau cours d'eau dont la distance de cook est inférieure à 0,01) que :
 
 - "p value" = 4,143e-13
 - "R² ajusté" = 0,05818
 
-Ce qui indique que ce lien de corrélation est statistiquement très faible.
+Ce qui indique que la significativité de ce lien de corrélation est très faible.
 
 ```{r message=FALSE, warning=FALSE}
-summary(mod1)
+plot(mod1)
 ```
 
 ```{r message=FALSE, warning=FALSE}
 summary(mod2)
 ```
-#### Répartition des plans d'eau selon ce ratio de débit
+##### Répartition des plans d'eau selon ce ratio de débit
 
 Voici la répartition des **plans d'eau ayant pu bénéficier d'un appariement de valeurs de débits**, en fonction de leur ratio Q5/Module (30593 surfaces élémentaires de plans d'eau retenues sur 208593 surfaces élémentaires de plans d'eau totales).
 
@@ -248,7 +247,7 @@ En écartant les mares et les marais :
 repartition_pehm_rh
 ```
 
-#### Superficie des surfaces élémentaires de plans d'eau en fonction du ratio de débit
+##### Superficie des surfaces élémentaires de plans d'eau en fonction du ratio de débit
 
 Surface moyenne :
 
@@ -274,9 +273,9 @@ Sans les mares et marais:
 surface_mediane_pehm_rh
 ```
 
-### L'implantation des plans d'eau est liée au type de masse d'eau (densité plus forte en zone côtière et littorale) ?
+#### L'implantation des plans d'eau est-elle liée au type de masse d'eau (densité plus forte en zone côtière et littorale) ?
 
-#### Type de masses d'eau de la zone d'étude
+##### Type de masses d'eau de la zone d'étude
 
 ```{r message=FALSE, warning=FALSE}
 afficher_carte<-function(...){

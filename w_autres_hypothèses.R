@@ -1350,7 +1350,7 @@ pe_select <- pe_select %>%
 
 diagramme_vent <- upset(pe_select,
                         c("Sur cours", "Sur source", "Sur nappe", "Sur zone humide"),
-                        name = "Alimentation des plans d'eau en régions Bretagne et Pays-de-la-Loire",
+                        name = "Alimentation des plans d'eau en régions\nBretagne et Pays-de-la-Loire",
                         queries = list(upset_query(set = 'Sur cours', fill='darkblue'),
                                        upset_query(set = 'Sur source', fill='lightblue'),
                                        upset_query(set = 'Sur nappe', fill='violet'),
@@ -1376,6 +1376,8 @@ diagramme_vent <- upset(pe_select,
                                              trans = "reverse"),
                         sort_sets = 'descending',
                         sort_intersections = 'descending')
+
+
 
 ## Table des plans d'eau et du réseau hydro ----
 
