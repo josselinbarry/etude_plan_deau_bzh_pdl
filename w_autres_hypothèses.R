@@ -8,6 +8,8 @@ library(kableExtra)
 library(png)
 library(rstatix)
 library(ggpubr)
+library(UpSetR)
+library(ComplexUpset)
 
 source(file = "R/compter_sommer_surfaces_dans_polygone.R")
 
@@ -95,6 +97,23 @@ surf_pehm_litho <-
     seulement_sur_cours = FALSE
   )
 
+surf_pehm_hors_mares_litho <-
+  compter_sommer_surfaces_dans_polygone(
+    couche_surface = pe %>% 
+      units::drop_units() %>%
+      st_drop_geometry() %>%
+      filter(mare ==0),
+    var_id_polygone = lithologie,
+    var_a_sommer = surface_m2,
+    var_nb_objets = nb_pehm_hors_mares,
+    var_somme_surfaces = surf_pehm_hors_mares,
+    zone_marais_incluse = FALSE,
+    seulement_permanent = FALSE, 
+    seulement_tdbv = FALSE,
+    seulement_connecte = FALSE, 
+    seulement_sur_cours = FALSE
+  )
+
 ### Jointure et calcul de densités ----
 
 litho_densite_pe <- litho_zone_etude %>% 
@@ -103,10 +122,28 @@ litho_densite_pe <- litho_zone_etude %>%
             join_by(lithologie == lithologie)) %>%
   left_join(surf_pehm_litho, 
             join_by(lithologie == lithologie)) %>%
+  left_join(surf_pehm_hors_mares_litho, 
+            join_by(lithologie == lithologie)) %>%
   mutate(dens_num_pe = nb_pe_tot / surface_km2, 
          dens_surf_pe = ((surf_pe_tot/1000000)*100) / surface_km2,
          dens_num_pehm = nb_pehm_tot / surface_km2, 
-         dens_surf_pehm = ((surf_pehm_tot/1000000)*100) / surface_km2)
+         dens_surf_pehm = ((surf_pehm_tot/1000000)*100) / surface_km2,
+         dens_num_pehm_hors_mares = nb_pehm_hors_mares / surface_km2, 
+         dens_surf_pehm_hors_mares = ((surf_pehm_hors_mares/1000000)*100) / surface_km2,)
+
+litho_densite_pe <- litho_densite_pe %>% 
+  mutate(lithologie = as.factor(lithologie),
+         lithologie = fct_relevel(lithologie,
+                             "Argiles",
+                             "Basaltes et rhyolites",
+                             "Calcaires, marne et gypse",
+                             "Craies",
+                             "Gneiss",
+                             "Granites",
+                             "Micaschistes",
+                             "Ophiolites",
+                             "Sables",
+                             "Schistes et grès"))
 
 sf::write_sf(obj = litho_densite_pe, dsn = "data/outputs/densite_per_lithlogie_20240718.gpkg")
 
@@ -120,7 +157,7 @@ table_litho_densite_pe <- litho_densite_pe %>%
          "Nombre de plans d'eau hors marais" = nb_pehm_tot,
          "Densité numérique en plans d'eau hors marais (/km²)" = round(dens_num_pehm, 2),
          ) %>%
-  select("Lithologie simplifiée", 
+  dplyr::select("Lithologie simplifiée", 
          "Surface (km²)", 
          "Proportion de surface (%)", 
          "Nombre total de plans d'eau",
@@ -135,7 +172,7 @@ table_litho_densite_pe <- litho_densite_pe %>%
 densite_numerique_pe_litho <-
   ggplot(litho_densite_pe,
        aes(y = dens_num_pe,
-           x = lithologie)) + 
+           x = fct_rev(lithologie))) + 
   geom_point() +
   labs(x = "Lithologie",
        y = "Densité numérique de plans d'eau",
@@ -145,7 +182,7 @@ densite_numerique_pe_litho <-
   theme(axis.title = element_text(size = 9),
         axis.text = element_text(size = 8),
         axis.title.y = element_text(margin = margin(r = 8)),
-        axis.title.x = element_text(margin = margin(t = 8))) +
+        axis.title.x = element_text(margin = margin(t = 8))) #+
   geom_hline(yintercept = 2.96625470035425, col = "black") +
   geom_hline(yintercept = 4.06466437893931, col = "darkblue") +
   geom_hline(yintercept = 1.6712139639832, col = "lightblue")
@@ -155,7 +192,7 @@ densite_numerique_pe_litho
 densite_numerique_pehm_litho <-
 ggplot(litho_densite_pe,
        aes(y = dens_num_pehm,
-           x = lithologie)) + 
+           x = fct_rev(lithologie))) + 
   geom_point() +
   labs(x = "Lithologie",
        y = "Densité numérique de plans d'eau",
@@ -165,19 +202,34 @@ ggplot(litho_densite_pe,
   theme(axis.title = element_text(size = 9),
         axis.text = element_text(size = 8),
         axis.title.y = element_text(margin = margin(r = 8)),
-        axis.title.x = element_text(margin = margin(t = 8))) +
+        axis.title.x = element_text(margin = margin(t = 8))) #+
   geom_hline(yintercept = 2.64410797263605, col = "black") +
   geom_hline(yintercept = 3.47558795935624, col = "darkblue") +
   geom_hline(yintercept = 1.66378116445733, col = "lightblue")
 
 densite_numerique_pehm_litho
 
+densite_numerique_pehm_hors_mares_litho <-
+  ggplot(litho_densite_pe,
+         aes(y = dens_num_pehm_hors_mares,
+             x = fct_rev(lithologie))) + 
+  geom_point() +
+  labs(x = "Lithologie",
+       y = "Densité numérique de plans d'eau",
+       title = "Densité numérique de plans d'eau selon la lithologie",
+       subtitle = "Bretagne et Pays de la Loire élargis (hors mares et marais)") +
+  coord_flip() +
+  theme(axis.title = element_text(size = 9),
+        axis.text = element_text(size = 8),
+        axis.title.y = element_text(margin = margin(r = 8)),
+        axis.title.x = element_text(margin = margin(t = 8)))
+
 #### Densite surfacique ----
 
 densite_surfacique_pe_litho <-
   ggplot(litho_densite_pe,
        aes(y = dens_surf_pe,
-           x = lithologie)) + 
+           x = fct_rev(lithologie))) + 
   geom_point() +
   labs(x = "Lithologie",
        y = "Densité surfacique de plans d'eau",
@@ -194,12 +246,27 @@ densite_surfacique_pe_litho
 densite_surfacique_pehm_litho <-
   ggplot(litho_densite_pe,
        aes(y = dens_surf_pehm,
-           x = lithologie)) + 
+           x = fct_rev(lithologie))) + 
   geom_point() +
   labs(x = "Lithologie",
        y = "Densité surfacique de plans d'eau",
        title = "Densité surfacique de plans d'eau selon la lithologie",
        subtitle = "Bretagne et Pays de la Loire élargis (hors marais)") +
+  coord_flip() +
+  theme(axis.title = element_text(size = 9),
+        axis.text = element_text(size = 8),
+        axis.title.y = element_text(margin = margin(r = 8)),
+        axis.title.x = element_text(margin = margin(t = 8)))
+
+densite_surfacique_pehm_hors_mares_litho <-
+  ggplot(litho_densite_pe,
+         aes(y = dens_surf_pehm_hors_mares,
+             x = fct_rev(lithologie))) + 
+  geom_point() +
+  labs(x = "Lithologie",
+       y = "Densité surfacique de plans d'eau",
+       title = "Densité surfacique de plans d'eau selon la lithologie",
+       subtitle = "Bretagne et Pays de la Loire élargis (hors mares et marais)") +
   coord_flip() +
   theme(axis.title = element_text(size = 9),
         axis.text = element_text(size = 8),
@@ -267,7 +334,7 @@ repartition_pe_rh <-
   labs(x = "Rapport du Qmna5 sur le module 
        (1/40 = 0,025 - 1/20ème = 0,05 - 1/10ème = 0,1)",
        y = "Nombre de plans d'eau",
-       title = "Répartition des plans d'eau selon la 'sévérité des étiages'",
+       title = "Répartition des plans d'eau selon la 'sévérité de leurs étiages'",
        subtitle = "Bretagne et Pays de la Loire élargis") +
   geom_vline(xintercept = 0.025, col = "darkred") +
   geom_vline(xintercept = 0.05, col = "darkorange") +
@@ -284,7 +351,7 @@ repartition_pehm_rh <-
   labs(x = "Rapport du Qmna5 sur le module
        (1/40 = 0,025 - 1/20ème = 0,05 - 1/10ème = 0,1)",
        y = "Nombre de plans d'eau",
-       title = "Répartition des plans d'eau selon la 'sévérité des étiages'",
+       title = "Répartition des plans d'eau selon la 'sévérité de leurs étiages'",
        subtitle = "Bretagne et Pays de la Loire élargis (hors mares et marais)") +
   geom_vline(xintercept = 0.025, col = "darkred") +
   geom_vline(xintercept = 0.05, col = "darkorange") +
@@ -295,12 +362,12 @@ repartition_pehm_rh <-
 repartition_bv_rh <-
   ggplot(data = bv_me %>% filter(!is.na(QAMOY_max) & QAMOY_max>=0), 
        aes(x = Q5MOY_max/QAMOY_max)) + 
-  geom_histogram(bnis = 300, fill="#2374ee") + 
+  geom_histogram(bins = 50, fill="#2374ee") + 
   scale_x_log10(labels = function(x) format(x, big.mark = " ", scientific = FALSE)) + 
   labs(x = "Rapport du Qmna5 sur le module
        (1/40 = 0,025 - 1/20ème = 0,05 - 1/10ème = 0,1)",
        y = "Nombre de bassins versant de masses d'eau",
-       title = "Répartition des bassins versant selon la 'sévérité des étiages'",
+       title = "Répartition des bassins versant selon la 'sévérité de leurs étiages'",
        subtitle = "Bretagne et Pays de la Loire élargis") +
   geom_vline(xintercept = 0.025, col = "darkred") +
   geom_vline(xintercept = 0.05, col = "darkorange") +
@@ -308,27 +375,48 @@ repartition_bv_rh <-
 
 repartition_bv_rh
 
+repartition_com_rh <-
+  ggplot(data = communes %>% filter(!is.na(QAMOY_max) & QAMOY_max>=0), 
+         aes(x = Q5MOY_max/QAMOY_max)) + 
+  geom_histogram(bins = 50, fill="#2374ee") + 
+  scale_x_log10(labels = function(x) format(x, big.mark = " ", scientific = FALSE)) + 
+  labs(x = "Rapport du Qmna5 sur le module
+       (1/40 = 0,025 - 1/20ème = 0,05 - 1/10ème = 0,1)",
+       y = "Nombre de communes",
+       title = "Répartition des communes selon la 'sévérité de leurs étiages'",
+       subtitle = "Bretagne et Pays de la Loire élargis") +
+  geom_vline(xintercept = 0.025, col = "darkred") +
+  geom_vline(xintercept = 0.05, col = "darkorange") +
+  geom_vline(xintercept = 0.1, col = "darkgreen")
+
+repartition_com_rh
+
 ## Densité numérique de plans d'eau selon le rapport du QMNA5 sur le module ----
 
 bv_me_q <- bv_me %>%
+  filter(Q5MOY_max>=0 & !is.na(Q5MOY_max)) %>%
   mutate(ratio_q5_qa = case_when(
     (Q5MOY_max/QAMOY_max) >= 0 & (Q5MOY_max/QAMOY_max) <= 0.025 ~ '<= 40ème',
     (Q5MOY_max/QAMOY_max) > 0.025 & (Q5MOY_max/QAMOY_max) <= 0.05 ~ 'Entre le 20ème et le 40ème',
     (Q5MOY_max/QAMOY_max) > 0.05 & (Q5MOY_max/QAMOY_max) <= 0.1 ~ 'Entre le 10ème et le 20ème',
-    (Q5MOY_max/QAMOY_max) > 0.1 ~ '> 10ème')) %>%
+    (Q5MOY_max/QAMOY_max) > 0.1 ~ '> 10ème',
+    is.na(Q5MOY_max/QAMOY_max) ~ 'NR')) %>%
   group_by(ratio_q5_qa) %>%
   summarise(surface_km2 = sum(surface_me)/1000000) %>%
   select(ratio_q5_qa, surface_km2) %>%
-  mutate(proportion_surface = (surface_km2*100)/sum(surface_km2)) %>%
-  st_drop_geometry()
+  mutate(proportion_surface = (surface_km2*100)/sum(surface_km2))
+
+pe_ratio <- pe %>% # Très long ...
+  st_intersection(bv_me_q) %>%
+  mutate(surf_intersect = st_area(.))
 
 surf_pe_tot_q <-
   compter_sommer_surfaces_dans_polygone(
-    couche_surface = pe_q %>% 
+    couche_surface = pe_ratio %>% 
       units::drop_units() %>% 
       st_drop_geometry(),
     var_id_polygone = ratio_q5_qa,
-    var_a_sommer = surface_m2,
+    var_a_sommer = surf_intersect,
     var_nb_objets = nb_pe_tot,
     var_somme_surfaces = surf_pe_tot,
     zone_marais_incluse = TRUE,
@@ -340,12 +428,12 @@ surf_pe_tot_q <-
 
 surf_pehm_q <-
   compter_sommer_surfaces_dans_polygone(
-    couche_surface = pe_q %>% 
+    couche_surface = pe_ratio %>% 
       units::drop_units() %>% 
       st_drop_geometry() %>%
       filter(mare == 0),
     var_id_polygone = ratio_q5_qa,
-    var_a_sommer = surface_m2,
+    var_a_sommer = surf_intersect,
     var_nb_objets = nb_pehm_tot,
     var_somme_surfaces = surf_pehm_tot,
     zone_marais_incluse = FALSE,
@@ -354,7 +442,6 @@ surf_pehm_q <-
     seulement_connecte = FALSE, 
     seulement_sur_cours = FALSE
   )
-
 
 bv_me_q <- bv_me_q %>%
   left_join(surf_pe_tot_q, join_by(ratio_q5_qa == ratio_q5_qa)) %>%
@@ -366,21 +453,31 @@ bv_me_q <- bv_me_q %>%
   filter(ratio_q5_qa != '')
 
 table_bv_me_q <- bv_me_q %>%
-  mutate("Type de régime hydrologique (q5/qa)" = ratio_q5_qa,
+  filter(ratio_q5_qa != 'NR') %>%
+  st_drop_geometry() %>%
+  mutate("Classe de 'sévérité des étiages' (ratio q5/qa)" = ratio_q5_qa,
          "Surface (km²)" = round(surface_km2),
          "Proportion de surface (%)" = round(proportion_surface, 1),
          "Nombre total de plans d'eau" = nb_pe_tot,
-         "Densité numérique en plans d'eau (/km²)" = round(dens_num_pe, 2),
-         "Nombre de plans d'eau hors mares et marais" = nb_pehm_tot,
-         "Densité numérique en plans d'eau hors mares et marais (/km²)" = round(dens_num_pehm, 2),
+         "Densité numérique en plans d'eau par km²" = round(dens_num_pe, 2),
+         "Nombre de plans d'eau (hors mares et marais)" = nb_pehm_tot,
+         "Densité numérique en plans d'eau (hors mares et marais) par km²" = round(dens_num_pehm, 2),
   ) %>%
-  select("Type de régime hydrologique (q5/qa)", 
+  dplyr::select("Classe de 'sévérité des étiages' (ratio q5/qa)", 
          "Surface (km²)", 
          "Proportion de surface (%)", 
          "Nombre total de plans d'eau",
-         "Densité numérique en plans d'eau (/km²)",
-         "Nombre de plans d'eau hors mares et marais",
-         "Densité numérique en plans d'eau hors mares et marais (/km²)")
+         "Densité numérique en plans d'eau par km²",
+         "Nombre de plans d'eau (hors mares et marais)",
+         "Densité numérique en plans d'eau (hors mares et marais) par km²")
+
+table_bv_me_q <- table_bv_me_q %>% 
+  mutate("Classe de 'sévérité des étiages' (ratio q5/qa)" = as.factor("Classe de 'sévérité des étiages' (ratio q5/qa)"),
+         "Classe de 'sévérité des étiages' (ratio q5/qa)" = fct_relevel(c("<= 40ème", "Entre le 20ème et le 40ème","Entre le 10ème et le 20ème","> 10ème"),
+                             "<= 40ème",
+                             "Entre le 20ème et le 40ème",
+                             "Entre le 10ème et le 20ème",
+                             "> 10ème"))
 
 table_bv_me_q <- table_bv_me_q %>% 
   mutate("Type de régime hydrologique (q5/qa)" = fct_relevel(c("> 10ème", "Entre le 10ème et le 20ème", "Entre le 20ème et le 40ème","<= 40ème")))
@@ -389,7 +486,8 @@ bv_me_q <- bv_me_q %>%
   mutate(ratio_q5_qa = fct_relevel(ratio_q5_qa, c("> 10ème", "Entre le 10ème et le 20ème", "Entre le 20ème et le 40ème","<= 40ème")))
 
 densite_numerique_pe_rh <-
-  ggplot(bv_me_q,
+  ggplot(bv_me_q %>%
+           filter(ratio_q5_qa != 'NR'),
        aes(y = dens_num_pe,
            x = ratio_q5_qa)) + 
   geom_point() +
@@ -408,7 +506,8 @@ densite_numerique_pe_rh <-
 densite_numerique_pe_rh
 
 densite_numerique_pehm_rh <-
-  ggplot(bv_me_q,
+  ggplot(bv_me_q %>%
+           filter(ratio_q5_qa != 'NR'),
        aes(y = dens_num_pehm,
            x = ratio_q5_qa)) + 
   geom_point() +
@@ -423,7 +522,8 @@ densite_numerique_pehm_rh <-
         axis.title.x = element_text(margin = margin(t = 8)))
 
 densite_surfacique_pe_rh <-
-  ggplot(bv_me_q,
+  ggplot(bv_me_q %>%
+           filter(ratio_q5_qa != 'NR'),
        aes(y = dens_surf_pe,
            x = ratio_q5_qa)) + 
   geom_point() +
@@ -438,7 +538,8 @@ densite_surfacique_pe_rh <-
         axis.title.x = element_text(margin = margin(t = 8)))
 
 densite_surfacique_pehm_rh <-
-ggplot(bv_me_q,
+ggplot(bv_me_q %>%
+         filter(ratio_q5_qa != 'NR'),
        aes(y = dens_surf_pehm,
            x = ratio_q5_qa)) + 
   geom_point() +
@@ -452,33 +553,35 @@ ggplot(bv_me_q,
         axis.title.y = element_text(margin = margin(r = 8)),
         axis.title.x = element_text(margin = margin(t = 8)))
 
-## Taille des plans d'eau par rapport au régime hydrologique ---- 
+## Taille médiane des surfaces élémentaires de plans d'eau selon la sévérité des étiages ---- 
 
 pe_q <- pe_q %>% 
   mutate(ratio_q5_qa = fct_relevel(ratio_q5_qa, c("> 10ème", "Entre le 10ème et le 20ème", "Entre le 20ème et le 40ème","<= 40ème")))
 
-pe_taille_q <- pe_q %>%
+pe_taille_q <- pe_ratio %>%
   st_drop_geometry() %>%
   group_by(ratio_q5_qa) %>%
-  summarise(surface_moy_pe = mean(surface_m2),
-            surface_med_pe = median(surface_m2)) %>%
+  summarise(surface_moy_pe = mean(surf_intersect),
+            surface_med_pe = median(surf_intersect)) %>%
   filter(!is.na(ratio_q5_qa))
 
-pehm_taille_q <- pe_q %>%
+pehm_taille_q <- pe_ratio %>%
   st_drop_geometry() %>%
   filter(zone_marais== 0 & mare == 0 ) %>%  
   group_by(ratio_q5_qa) %>%
-  summarise(surface_moy_pehm = mean(surface_m2),
-            surface_med_pehm = median(surface_m2))%>%
+  summarise(surface_moy_pehm = mean(surf_intersect),
+            surface_med_pehm = median(surf_intersect))%>%
   filter(!is.na(ratio_q5_qa))
 
 surface_moyenne_pe_rh <-
-ggplot(pe_taille_q,
+ggplot(pe_taille_q %>% 
+         drop_units() %>%
+         filter(ratio_q5_qa != 'NR'),
        aes(y = surface_moy_pe,
            x = ratio_q5_qa)) + 
   geom_point() +
   labs(x = "Ratio du Qmna5 sur le module",
-       y = "Surface moyenne des plans d'eau",
+       y = "Surface moyenne des plans d'eau (m²)",
        title = "Surface moyenne des plans d'eau selon la 'sévérité des étiages'",
        subtitle = "Bretagne et Pays de la Loire élargis") +
   coord_flip() +
@@ -488,12 +591,14 @@ ggplot(pe_taille_q,
         axis.title.x = element_text(margin = margin(t = 8)))
 
 surface_moyenne_pehm_rh <-
-  ggplot(pehm_taille_q,
+  ggplot(pehm_taille_q%>% 
+           drop_units() %>%
+           filter(ratio_q5_qa != 'NR'),
        aes(y = surface_moy_pehm,
            x = ratio_q5_qa)) + 
   geom_point() +
   labs(x = "Ratio du Qmna5 sur le module",
-       y = "Surface moyenne des plans d'eau",
+       y = "Surface moyenne des plans d'eau (m²)",
        title = "Surface moyenne des plans d'eau selon la 'sévérité des étiages'",
        subtitle = "Bretagne et Pays de la Loire élargis (hors mares et marais)") +
   coord_flip() +
@@ -503,12 +608,14 @@ surface_moyenne_pehm_rh <-
         axis.title.x = element_text(margin = margin(t = 8)))
 
 surface_mediane_pe_rh <-
-  ggplot(pe_taille_q,
-       aes(y = surface_med_pe,
+  ggplot(pe_taille_q%>% 
+           drop_units() %>%
+           filter(ratio_q5_qa != 'NR'),
+         aes(y = surface_med_pe,
            x = ratio_q5_qa)) + 
   geom_point() +
   labs(x = "Ratio du Qmna5 sur le module",
-       y = "Surface médiane des plans d'eau ",
+       y = "Surface médiane des plans d'eau (m²)",
        title = "Surface médiane des plans d'eau selon la 'sévérité des étiages'",
        subtitle = "Bretagne et Pays de la Loire élargis") +
   coord_flip() +
@@ -518,12 +625,14 @@ surface_mediane_pe_rh <-
         axis.title.x = element_text(margin = margin(t = 8)))
 
 surface_mediane_pehm_rh <-
-  ggplot(pehm_taille_q,
+  ggplot(pehm_taille_q%>% 
+           drop_units() %>%
+           filter(ratio_q5_qa != 'NR'),
        aes(y = surface_med_pehm,
            x = ratio_q5_qa)) + 
   geom_point() +
   labs(x = "Ratio du Qmna5 sur le module",
-       y = "Surface médiane des plans d'eau ",
+       y = "Surface médiane des plans d'eau (m²)",
        title = "Surface médiane des plans d'eau selon la 'sévérité des étiages'",
        subtitle = "Bretagne et Pays de la Loire élargis (hors mares et marais)") +
   coord_flip() +
@@ -533,7 +642,9 @@ surface_mediane_pehm_rh <-
         axis.title.x = element_text(margin = margin(t = 8)))
 
 surface_pehm_rh <-
-  ggplot(pe_q %>% filter(!is.na(QAMOY_MN) & Q5MOY_MN/QAMOY_MN >= 0 & surface_m2 < 15000000),
+  ggplot(pe_ratio %>% filter((Q5MOY_MN)/QAMOY_MN >= 0 & 
+                               (Q5MOY_MN)/QAMOY_MN < 1 &
+                               surface_m2 < 1500000),
          aes(y = (Q5MOY_MN)/QAMOY_MN,
              x = surface_m2)) + 
   geom_point() +
@@ -617,7 +728,7 @@ densite_surfacique_pehm_rh_bvme <-
 
 densite_numerique_pehm_rh_bvme_logx <-
   ggplot(bv_me %>%
-           filter(!is.na(QAMOY_max)),
+           filter(!is.na(QAMOY_max) & Q5MOY_max/QAMOY_max < 1 & Q5MOY_max/QAMOY_max > 0.001),
          aes(y = (coalesce(nb_pehm_tot,0)/((surface_me-surface_marais)/1000000)),
              x = (Q5MOY_max/QAMOY_max ))) + 
   geom_point() +
@@ -625,7 +736,7 @@ densite_numerique_pehm_rh_bvme_logx <-
   labs(x = "Ratio du Qmna5 sur le module",
        y = "Densité numérique en plans d'eau 
   du bassin versant des masses d'eau",
-       title = "Densité numérique en plans d'eau des masses d'eau selon la 'sévérité des étiages'",
+       title = "Densité numérique en plans d'eau des masses d'eau selon la 'sévérité de leurs\nétiages'",
        subtitle = "Bretagne et Pays de la Loire élargis (hors mares et marais)") +
   theme(axis.title = element_text(size = 9),
         axis.text = element_text(size = 8),
@@ -638,7 +749,7 @@ densite_numerique_pehm_rh_bvme_logx <-
 
 densite_surfacique_pehm_rh_bvme_logx <-
   ggplot(bv_me %>%
-           filter(!is.na(QAMOY_max)),
+           filter(!is.na(QAMOY_max) & Q5MOY_max/QAMOY_max < 1 & Q5MOY_max/QAMOY_max > 0.001),
          aes(y = (coalesce(surf_pehm_tot,0)*100/(surface_me-surface_marais)),
              x = (Q5MOY_max/QAMOY_max ))) + 
   geom_point() +
@@ -646,7 +757,7 @@ densite_surfacique_pehm_rh_bvme_logx <-
   labs(x = "Ratio du Qmna5 sur le module",
        y = "Densité surfacique en plans d'eau 
   du bassin versant des masses d'eau",
-       title = "Densité surfacique en plans d'eau des masses d'eau selon la 'sévérité des étiages'",
+       title = "Densité surfacique en plans d'eau des masses d'eau selon la 'sévérité de leurs\nétiages'",
        subtitle = "Bretagne et Pays de la Loire élargis (hors mares et marais)") +
   theme(axis.title = element_text(size = 9),
         axis.text = element_text(size = 8),
@@ -661,7 +772,7 @@ densite_surfacique_pehm_rh_bvme_logx <-
 
 densite_numerique_pehm_rh_com_logx <-
   ggplot(communes %>%
-           filter(!is.na(QAMOY_max)),
+           filter(!is.na(QAMOY_max) & Q5MOY_max/QAMOY_max < 1 & Q5MOY_max/QAMOY_max > 0.001),
          aes(y = (coalesce(nb_pehm_tot,0)/((surface_com-surface_marais)/1000000)),
              x = (Q5MOY_max/QAMOY_max ))) + 
   geom_point() +
@@ -681,7 +792,7 @@ densite_numerique_pehm_rh_com_logx <-
 
 densite_surfacique_pehm_rh_com_logx <-
   ggplot(communes %>%
-           filter(!is.na(QAMOY_max)),
+           filter(!is.na(QAMOY_max) & Q5MOY_max/QAMOY_max < 1 & Q5MOY_max/QAMOY_max > 0.001),
          aes(y = (coalesce(surf_pehm_tot,0)*100/(surface_com-surface_marais)),
              x = (Q5MOY_max/QAMOY_max ))) + 
   geom_point() +
@@ -702,14 +813,14 @@ densite_surfacique_pehm_rh_com_logx <-
 # Densite numerique plus forte sur certains types de ME (cotiere, transition + ?) ----
 
 bv_me_type <- bv_me %>%
+  filter(substr(cdeumassed, 4,4) != 'L') %>%
   mutate(type = case_when(
     substr(cdeumassed, 4,4) == 'R' ~ 'cours deau',
-    substr(cdeumassed, 4,4) == 'L' ~ 'plan deau',
     substr(cdeumassed, 4,4) == 'C' ~ 'cotiere',
     substr(cdeumassed, 4,4) == 'T' ~ 'transition')) %>%
   group_by(type) %>%
   summarise(surface_km2 = sum(surface_me)/1000000) %>%
-  select(type, surface_km2) %>%
+  dplyr::select(type, surface_km2) %>%
   mutate(proportion_surface = (surface_km2*100)/sum(surface_km2)) %>%
   st_drop_geometry()
 
@@ -771,7 +882,7 @@ table_bv_me_type <- bv_me_type %>%
          "Nombre de plans d'eau hors mares et marais" = nb_pehm_tot,
          "Densité numérique en plans d'eau hors mares et marais (/km²)" = round(dens_num_pehm, 2),
   ) %>%
-  select("Type de masse d'eau", 
+  dplyr::select("Type de masse d'eau", 
          "Surface (km²)", 
          "Proportion de surface (%)", 
          "Nombre total de plans d'eau",
@@ -1206,6 +1317,37 @@ cl_maraichage_com_densite_numerique_pehm <-
 
 ## Diagramme de vent ----
 
+pe_select <- pe %>% 
+  filter(mare == 0 & zone_marais == 0) %>%
+  filter(cd_dprt == '22' |
+           cd_dprt == '29' |
+           cd_dprt == '35' |
+           cd_dprt == '56' |
+           cd_dprt == '44' |
+           cd_dprt == '49' |
+           cd_dprt == '53' |
+           cd_dprt == '72' |
+           cd_dprt == '85') %>%
+  select(cdoh_plando,
+         connecte_rh,
+         connecte_source,
+         connecte_lh,
+         connecte_nappe,
+         zhp) %>% 
+  st_drop_geometry() %>% 
+  column_to_rownames("cdoh_plando")
+
+pe_select <- pe_select %>% 
+  mutate("Sur cours" = ifelse(connecte_lh == 1, 1, 0),
+         "Sur source" = ifelse(connecte_source == 1, 1, 0),
+         "Sur nappe" = ifelse(connecte_nappe == 1, 1, 0),
+         "Sur zone humide" = ifelse(zhp == 1, 1, 0)) %>%
+  select(-connecte_rh,
+         -connecte_source,
+         -connecte_lh,
+         -connecte_nappe,
+         -zhp)
+
 diagramme_vent <- upset(pe_select,
                         c("Sur cours", "Sur source", "Sur nappe", "Sur zone humide"),
                         name = "Alimentation des plans d'eau en régions Bretagne et Pays-de-la-Loire",
@@ -1234,6 +1376,370 @@ diagramme_vent <- upset(pe_select,
                                              trans = "reverse"),
                         sort_sets = 'descending',
                         sort_intersections = 'descending')
+
+## Table des plans d'eau et du réseau hydro ----
+
+table_pe_alimentation <- pe %>%
+  filter(mare == 0 & zone_marais == 0) %>%
+  filter(cd_dprt == '22' |
+           cd_dprt == '29' |
+           cd_dprt == '35' |
+           cd_dprt == '56' |
+           cd_dprt == '44' |
+           cd_dprt == '49' |
+           cd_dprt == '53' |
+           cd_dprt == '72' |
+           cd_dprt == '85') %>%
+  mutate(emprise = 'Bretagne et Pays de la Loire') %>%
+  select(emprise, 
+         cdoh_plando,
+         connecte_rh,
+         connecte_source,
+         connecte_lh,
+         connecte_nappe,
+         zhp) %>% 
+  st_drop_geometry() %>%
+  summarise("Emprise" = 'Bretagne et Pays de la Loire',
+            "Nombre total de plans d'eau (hors mares et marais)" = n(), 
+            "Nombre de plans d'eau en zone humide" = sum(zhp),
+            "% en zone humide" = round(sum(zhp)*100/n(), 2),
+            "Nombre de plans d'eau connectés" = sum(connecte_rh), 
+            "% connecte" = round(sum(connecte_rh)*100/n(), 2),
+            "Nombre de plans d'eau sur nappe" = sum(connecte_nappe), 
+            "% sur nappe" = round(sum(connecte_nappe)*100/n(), 2),
+            "Nombre de plans d'eau sur cours" = sum(connecte_lh), 
+            "% sur cours" = round(sum(connecte_lh)*100/n(), 2),
+            "Nombre de plans d'eau sur source" = sum(connecte_source), 
+            "% sur source" = round(sum(connecte_source)*100/n(), 2)
+            )
+
+table_pe_alimentation_bzh <- pe %>%
+  filter(mare == 0 & zone_marais == 0) %>%
+  filter(cd_dprt == '22' |
+           cd_dprt == '29' |
+           cd_dprt == '35' |
+           cd_dprt == '56' ) %>%
+  mutate(emprise = 'Bretagne') %>%
+  select(emprise, 
+         cdoh_plando,
+         connecte_rh,
+         connecte_source,
+         connecte_lh,
+         connecte_nappe,
+         zhp) %>% 
+  st_drop_geometry() %>%
+  summarise("Emprise" = 'Bretagne',
+            "Nombre total de plans d'eau (hors mares et marais)" = n(), 
+            "Nombre de plans d'eau en zone humide" = sum(zhp),
+            "% en zone humide" = round(sum(zhp)*100/n(), 2),
+            "Nombre de plans d'eau connectés" = sum(connecte_rh), 
+            "% connecte" = round(sum(connecte_rh)*100/n(), 2),
+            "Nombre de plans d'eau sur nappe" = sum(connecte_nappe), 
+            "% sur nappe" = round(sum(connecte_nappe)*100/n(), 2),
+            "Nombre de plans d'eau sur cours" = sum(connecte_lh), 
+            "% sur cours" = round(sum(connecte_lh)*100/n(), 2),
+            "Nombre de plans d'eau sur source" = sum(connecte_source), 
+            "% sur source" = round(sum(connecte_source)*100/n(), 2)
+  )
+
+table_pe_alimentation_pdl <- pe %>%
+  filter(mare == 0 & zone_marais == 0) %>%
+  filter(cd_dprt == '44' |
+           cd_dprt == '49' |
+           cd_dprt == '53' |
+           cd_dprt == '72' |
+           cd_dprt == '85') %>%
+  mutate(emprise = 'Pays de la Loire') %>%
+  select(emprise, 
+         cdoh_plando,
+         connecte_rh,
+         connecte_source,
+         connecte_lh,
+         connecte_nappe,
+         zhp) %>% 
+  st_drop_geometry() %>%
+  summarise("Emprise" = 'Pays de la Loire',
+            "Nombre total de plans d'eau (hors mares et marais)" = n(), 
+            "Nombre de plans d'eau en zone humide" = sum(zhp),
+            "% en zone humide" = round(sum(zhp)*100/n(), 2),
+            "Nombre de plans d'eau connectés" = sum(connecte_rh), 
+            "% connecte" = round(sum(connecte_rh)*100/n(), 2),
+            "Nombre de plans d'eau sur nappe" = sum(connecte_nappe), 
+            "% sur nappe" = round(sum(connecte_nappe)*100/n(), 2),
+            "Nombre de plans d'eau sur cours" = sum(connecte_lh), 
+            "% sur cours" = round(sum(connecte_lh)*100/n(), 2),
+            "Nombre de plans d'eau sur source" = sum(connecte_source), 
+            "% sur source" = round(sum(connecte_source)*100/n(), 2)
+  )
+
+table_pe_alimentation_tot <- pe %>%
+  filter(mare == 0 & zone_marais == 0) %>%
+  mutate(emprise = "Zone d'étude") %>%
+  select(emprise, 
+         cdoh_plando,
+         connecte_rh,
+         connecte_source,
+         connecte_lh,
+         connecte_nappe,
+         zhp) %>% 
+  st_drop_geometry() %>%
+  summarise("Emprise" = "Zone d'étude",
+            "Nombre total de plans d'eau (hors mares et marais)" = n(), 
+            "Nombre de plans d'eau en zone humide" = sum(zhp),
+            "% en zone humide" = round(sum(zhp)*100/n(), 2),
+            "Nombre de plans d'eau connectés" = sum(connecte_rh), 
+            "% connecte" = round(sum(connecte_rh)*100/n(), 2),
+            "Nombre de plans d'eau sur nappe" = sum(connecte_nappe), 
+            "% sur nappe" = round(sum(connecte_nappe)*100/n(), 2),
+            "Nombre de plans d'eau sur cours" = sum(connecte_lh), 
+            "% sur cours" = round(sum(connecte_lh)*100/n(), 2),
+            "Nombre de plans d'eau sur source" = sum(connecte_source), 
+            "% sur source" = round(sum(connecte_source)*100/n(), 2)
+  )
+
+table_pe_alimentation_22 <- pe %>%
+  filter(mare == 0 & zone_marais == 0 & cd_dprt == '22') %>%
+  mutate(emprise = "Côtes d'Armor") %>%
+  select(emprise, 
+         cdoh_plando,
+         connecte_rh,
+         connecte_source,
+         connecte_lh,
+         connecte_nappe,
+         zhp) %>% 
+  st_drop_geometry() %>%
+  summarise("Emprise" = "Côtes d'Armor",
+            "Nombre total de plans d'eau (hors mares et marais)" = n(), 
+            "Nombre de plans d'eau en zone humide" = sum(zhp),
+            "% en zone humide" = round(sum(zhp)*100/n(), 2),
+            "Nombre de plans d'eau connectés" = sum(connecte_rh), 
+            "% connecte" = round(sum(connecte_rh)*100/n(), 2),
+            "Nombre de plans d'eau sur nappe" = sum(connecte_nappe), 
+            "% sur nappe" = round(sum(connecte_nappe)*100/n(), 2),
+            "Nombre de plans d'eau sur cours" = sum(connecte_lh), 
+            "% sur cours" = round(sum(connecte_lh)*100/n(), 2),
+            "Nombre de plans d'eau sur source" = sum(connecte_source), 
+            "% sur source" = round(sum(connecte_source)*100/n(), 2))
+
+table_pe_alimentation_29 <- pe %>%
+  filter(mare == 0 & zone_marais == 0 & cd_dprt == '29') %>%
+  mutate(emprise = "Finistère") %>%
+  select(emprise, 
+         cdoh_plando,
+         connecte_rh,
+         connecte_source,
+         connecte_lh,
+         connecte_nappe,
+         zhp) %>% 
+  st_drop_geometry() %>%
+  summarise("Emprise" = "Finistère",
+            "Nombre total de plans d'eau (hors mares et marais)" = n(), 
+            "Nombre de plans d'eau en zone humide" = sum(zhp),
+            "% en zone humide" = round(sum(zhp)*100/n(), 2),
+            "Nombre de plans d'eau connectés" = sum(connecte_rh), 
+            "% connecte" = round(sum(connecte_rh)*100/n(), 2),
+            "Nombre de plans d'eau sur nappe" = sum(connecte_nappe), 
+            "% sur nappe" = round(sum(connecte_nappe)*100/n(), 2),
+            "Nombre de plans d'eau sur cours" = sum(connecte_lh), 
+            "% sur cours" = round(sum(connecte_lh)*100/n(), 2),
+            "Nombre de plans d'eau sur source" = sum(connecte_source), 
+            "% sur source" = round(sum(connecte_source)*100/n(), 2))
+
+table_pe_alimentation_35 <- pe %>%
+  filter(mare == 0 & zone_marais == 0 & cd_dprt == '35') %>%
+  mutate(emprise = "Ille et Vilaine") %>%
+  select(emprise, 
+         cdoh_plando,
+         connecte_rh,
+         connecte_source,
+         connecte_lh,
+         connecte_nappe,
+         zhp) %>% 
+  st_drop_geometry() %>%
+  summarise("Emprise" = "Ille et Vilaine",
+            "Nombre total de plans d'eau (hors mares et marais)" = n(), 
+            "Nombre de plans d'eau en zone humide" = sum(zhp),
+            "% en zone humide" = round(sum(zhp)*100/n(), 2),
+            "Nombre de plans d'eau connectés" = sum(connecte_rh), 
+            "% connecte" = round(sum(connecte_rh)*100/n(), 2),
+            "Nombre de plans d'eau sur nappe" = sum(connecte_nappe), 
+            "% sur nappe" = round(sum(connecte_nappe)*100/n(), 2),
+            "Nombre de plans d'eau sur cours" = sum(connecte_lh), 
+            "% sur cours" = round(sum(connecte_lh)*100/n(), 2),
+            "Nombre de plans d'eau sur source" = sum(connecte_source), 
+            "% sur source" = round(sum(connecte_source)*100/n(), 2))
+
+table_pe_alimentation_44 <- pe %>%
+  filter(mare == 0 & zone_marais == 0 & cd_dprt == '44') %>%
+  mutate(emprise = "Loire Atlantique") %>%
+  select(emprise, 
+         cdoh_plando,
+         connecte_rh,
+         connecte_source,
+         connecte_lh,
+         connecte_nappe,
+         zhp) %>% 
+  st_drop_geometry() %>%
+  summarise("Emprise" = "Loire Atlantique",
+            "Nombre total de plans d'eau (hors mares et marais)" = n(), 
+            "Nombre de plans d'eau en zone humide" = sum(zhp),
+            "% en zone humide" = round(sum(zhp)*100/n(), 2),
+            "Nombre de plans d'eau connectés" = sum(connecte_rh), 
+            "% connecte" = round(sum(connecte_rh)*100/n(), 2),
+            "Nombre de plans d'eau sur nappe" = sum(connecte_nappe), 
+            "% sur nappe" = round(sum(connecte_nappe)*100/n(), 2),
+            "Nombre de plans d'eau sur cours" = sum(connecte_lh), 
+            "% sur cours" = round(sum(connecte_lh)*100/n(), 2),
+            "Nombre de plans d'eau sur source" = sum(connecte_source), 
+            "% sur source" = round(sum(connecte_source)*100/n(), 2))
+
+table_pe_alimentation_49 <- pe %>%
+  filter(mare == 0 & zone_marais == 0 & cd_dprt == '49') %>%
+  mutate(emprise = "Maine et Loire") %>%
+  select(emprise, 
+         cdoh_plando,
+         connecte_rh,
+         connecte_source,
+         connecte_lh,
+         connecte_nappe,
+         zhp) %>% 
+  st_drop_geometry() %>%
+  summarise("Emprise" = "Maine et Loire",
+            "Nombre total de plans d'eau (hors mares et marais)" = n(), 
+            "Nombre de plans d'eau en zone humide" = sum(zhp),
+            "% en zone humide" = round(sum(zhp)*100/n(), 2),
+            "Nombre de plans d'eau connectés" = sum(connecte_rh), 
+            "% connecte" = round(sum(connecte_rh)*100/n(), 2),
+            "Nombre de plans d'eau sur nappe" = sum(connecte_nappe), 
+            "% sur nappe" = round(sum(connecte_nappe)*100/n(), 2),
+            "Nombre de plans d'eau sur cours" = sum(connecte_lh), 
+            "% sur cours" = round(sum(connecte_lh)*100/n(), 2),
+            "Nombre de plans d'eau sur source" = sum(connecte_source), 
+            "% sur source" = round(sum(connecte_source)*100/n(), 2))
+
+table_pe_alimentation_53 <- pe %>%
+  filter(mare == 0 & zone_marais == 0 & cd_dprt == '53') %>%
+  mutate(emprise = "Mayenne") %>%
+  select(emprise, 
+         cdoh_plando,
+         connecte_rh,
+         connecte_source,
+         connecte_lh,
+         connecte_nappe,
+         zhp) %>% 
+  st_drop_geometry() %>%
+  summarise("Emprise" = "Mayenne",
+            "Nombre total de plans d'eau (hors mares et marais)" = n(), 
+            "Nombre de plans d'eau en zone humide" = sum(zhp),
+            "% en zone humide" = round(sum(zhp)*100/n(), 2),
+            "Nombre de plans d'eau connectés" = sum(connecte_rh), 
+            "% connecte" = round(sum(connecte_rh)*100/n(), 2),
+            "Nombre de plans d'eau sur nappe" = sum(connecte_nappe), 
+            "% sur nappe" = round(sum(connecte_nappe)*100/n(), 2),
+            "Nombre de plans d'eau sur cours" = sum(connecte_lh), 
+            "% sur cours" = round(sum(connecte_lh)*100/n(), 2),
+            "Nombre de plans d'eau sur source" = sum(connecte_source), 
+            "% sur source" = round(sum(connecte_source)*100/n(), 2))
+
+table_pe_alimentation_56 <- pe %>%
+  filter(mare == 0 & zone_marais == 0 & cd_dprt == '56') %>%
+  mutate(emprise = "Morbihan") %>%
+  select(emprise, 
+         cdoh_plando,
+         connecte_rh,
+         connecte_source,
+         connecte_lh,
+         connecte_nappe,
+         zhp) %>% 
+  st_drop_geometry() %>%
+  summarise("Emprise" = "Morbihan",
+            "Nombre total de plans d'eau (hors mares et marais)" = n(), 
+            "Nombre de plans d'eau en zone humide" = sum(zhp),
+            "% en zone humide" = round(sum(zhp)*100/n(), 2),
+            "Nombre de plans d'eau connectés" = sum(connecte_rh), 
+            "% connecte" = round(sum(connecte_rh)*100/n(), 2),
+            "Nombre de plans d'eau sur nappe" = sum(connecte_nappe), 
+            "% sur nappe" = round(sum(connecte_nappe)*100/n(), 2),
+            "Nombre de plans d'eau sur cours" = sum(connecte_lh), 
+            "% sur cours" = round(sum(connecte_lh)*100/n(), 2),
+            "Nombre de plans d'eau sur source" = sum(connecte_source), 
+            "% sur source" = round(sum(connecte_source)*100/n(), 2))
+
+table_pe_alimentation_72 <- pe %>%
+  filter(mare == 0 & zone_marais == 0 & cd_dprt == '72') %>%
+  mutate(emprise = "Sarthe") %>%
+  select(emprise, 
+         cdoh_plando,
+         connecte_rh,
+         connecte_source,
+         connecte_lh,
+         connecte_nappe,
+         zhp) %>% 
+  st_drop_geometry() %>%
+  summarise("Emprise" = "Sarthe",
+            "Nombre total de plans d'eau (hors mares et marais)" = n(), 
+            "Nombre de plans d'eau en zone humide" = sum(zhp),
+            "% en zone humide" = round(sum(zhp)*100/n(), 2),
+            "Nombre de plans d'eau connectés" = sum(connecte_rh), 
+            "% connecte" = round(sum(connecte_rh)*100/n(), 2),
+            "Nombre de plans d'eau sur nappe" = sum(connecte_nappe), 
+            "% sur nappe" = round(sum(connecte_nappe)*100/n(), 2),
+            "Nombre de plans d'eau sur cours" = sum(connecte_lh), 
+            "% sur cours" = round(sum(connecte_lh)*100/n(), 2),
+            "Nombre de plans d'eau sur source" = sum(connecte_source), 
+            "% sur source" = round(sum(connecte_source)*100/n(), 2))
+
+table_pe_alimentation_85 <- pe %>%
+  filter(mare == 0 & zone_marais == 0 & cd_dprt == '85') %>%
+  mutate(emprise = "Vendée") %>%
+  select(emprise, 
+         cdoh_plando,
+         connecte_rh,
+         connecte_source,
+         connecte_lh,
+         connecte_nappe,
+         zhp) %>% 
+  st_drop_geometry() %>%
+  summarise("Emprise" = "Vendée",
+            "Nombre total de plans d'eau (hors mares et marais)" = n(), 
+            "Nombre de plans d'eau en zone humide" = sum(zhp),
+            "% en zone humide" = round(sum(zhp)*100/n(), 2),
+            "Nombre de plans d'eau connectés" = sum(connecte_rh), 
+            "% connecte" = round(sum(connecte_rh)*100/n(), 2),
+            "Nombre de plans d'eau sur nappe" = sum(connecte_nappe), 
+            "% sur nappe" = round(sum(connecte_nappe)*100/n(), 2),
+            "Nombre de plans d'eau sur cours" = sum(connecte_lh), 
+            "% sur cours" = round(sum(connecte_lh)*100/n(), 2),
+            "Nombre de plans d'eau sur source" = sum(connecte_source), 
+            "% sur source" = round(sum(connecte_source)*100/n(), 2))
+
+table_tot_pe_alimentation <- dplyr::bind_rows(table_pe_alimentation_tot, 
+                                              table_pe_alimentation, 
+                                              table_pe_alimentation_pdl, 
+                                              table_pe_alimentation_bzh, 
+                                              table_pe_alimentation_22, 
+                                              table_pe_alimentation_29, 
+                                              table_pe_alimentation_35, 
+                                              table_pe_alimentation_44, 
+                                              table_pe_alimentation_53, 
+                                              table_pe_alimentation_56, 
+                                              table_pe_alimentation_72, 
+                                              table_pe_alimentation_85)
+
+openxlsx::write.xlsx(table_tot_pe_alimentation %>%
+                       as.data.frame(), 
+                     file = "data/outputs/table_tot_pe_alimentation.xlsx" )
+
+write.csv(table_tot_pe_alimentation, file = "data/outputs/table_tot_pe_alimentation.csv" )
+
+table_alimentation <- data.table::fread(file = "data/outputs/table_tot_pe_alimentation.csv",
+                     encoding = "UTF-8")
+
+table_tot_pe_alimentation %>%
+  as.data.frame() %>%
+  kbl() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), font_size = 12) 
+
 
 ## Surface des PE ----
 
@@ -1280,7 +1786,7 @@ histo_strahler_pe <-
   geom_histogram(fill="#2374ee") + labs(
     x = "Rang de Strahler du plus proche cours d'eau",
     y = "Nombre de plans d'eau",
-    title = "Répartition des plans d'eau selon le rang de Strahler du plus proche cours d'eau", width=40)
+    title = "Répartition des plans d'eau selon le rang de Strahler du plus proche cours \nd'eau", width=40)
 
 ## Linéaire intercepté des me ----
 
@@ -1320,6 +1826,68 @@ ggqqplot(residuals(model_densnum_geol))
 
 shapiro_test(residuals(model_densnum_geol))
 
+
+## Analyse stat ratio de débit et densité numérique ----
+
+library(MASS)
+library(stats)
+library(tidyverse)
+library(PerformanceAnalytics)
+
+bv_me_stat_q <- bv_me %>%
+  filter(Q5MOY_max >= 0 & !is.na(Q5MOY_max), 
+         substring(cdeumassed, 4, 4) == 'R') %>%
+  mutate(ratio_q5_qa = (coalesce(Q5MOY_max,0) / coalesce(QAMOY_max,0)),
+         densite_pehm_hors_mares = coalesce(nb_pehm_tot,0)/(surface_me/1000000) ) %>%
+  dplyr::select(cdeumassed, densite_pehm_hors_mares, ratio_q5_qa) %>%
+  mutate(across(densite_pehm_hors_mares, log), 
+         across(ratio_q5_qa, function(x) log(1+x)))
+
+bv_me_stat_q <- bv_me_stat_q %>%
+  filter(!is.na(ratio_q5_qa)) %>%
+  mutate(cdeumassed=as.character(cdeumassed)) %>%
+  st_drop_geometry()
+
+# Filtre éventuel selon la distance de cook
+
+bv_me_stat_q <- bv_me_stat_q %>%
+  left_join(dist_cook) %>%
+  filter(!is.na(cook) &
+           cook < 0.01)
+
+corr_tot_test_stat_q <- bv_me_stat_q %>% 
+  dplyr::select(-cdeumassed) %>%
+  cor(method = "pearson")
+
+corrplot::corrplot(corr_tot_test_stat_q, order="hclust",tl.srt=45, addrect = 8)
+
+names(bv_me_stat_q)
+
+bv_me_stat_q <- bv_me_stat_q %>% 
+  dplyr::select(-cook) %>%
+#  filter(cdeumassed != 'FRHR348' & cdeumassed != 'FRHT05') %>%
+  column_to_rownames("cdeumassed")
+
+mod1 <- lm(densite_pehm_hors_mares ~
+                 ratio_q5_qa,
+               data = bv_me_stat_q)
+
+summary(mod1)
+
+plot(mod1)
+
+cook <- cooks.distance(mod1)
+
+dist_cook <- as.data.frame(cook) %>% 
+  rownames_to_column("cdeumassed") 
+
+sf::write_sf(obj = dist_cook, dsn = "data/outputs/distance_cook_test_q_20240605.gpkg")
+
+
+mod2 <- MASS::stepAIC(mod1)
+
+summary(mod2)
+
 # Sauvegarde ----
 
 save( bv_me,
@@ -1327,8 +1895,10 @@ save( bv_me,
       table_litho_densite_pe,
       densite_numerique_pe_litho,
       densite_numerique_pehm_litho,
+      densite_numerique_pehm_hors_mares_litho,
       densite_surfacique_pe_litho,
       densite_surfacique_pehm_litho,
+      densite_surfacique_pehm_hors_mares_litho,
       pe_taille,
       surface_moyenne_pehm_litho,
       surface_mediane_pehm_litho,
@@ -1336,7 +1906,9 @@ save( bv_me,
       repartition_pe_rh,
       repartition_pehm_rh,
       repartition_bv_rh,
+      repartition_com_rh,
       bv_me_q,
+      pe_ratio,
       table_bv_me_q,
       densite_numerique_pe_rh,
       densite_numerique_pehm_rh,
@@ -1359,28 +1931,17 @@ save( bv_me,
       densite_numerique_pehm_type,
       densite_surfacique_pe_type,
       densite_surfacique_pehm_type,
-      bv_me_maraichage,
-      classes_maraichage,
-      table_classes_maraichage,
-      maraichage_densite_numerique_tot,
-      maraichage_densite_numerique_pehm,
-      cl_maraichage_densite_numerique_pe,
-      cl_maraichage_densite_numerique_pehm,
-      com_maraichage,
-      classes_maraichage_com,
-      table_classes_maraichage_com,
-      maraichage_com_densite_numerique_tot,
-      maraichage_com_densite_numerique_pehm,
-      maraichage_com_densite_surfacique_tot,
-      maraichage_com_densite_surfacique_pehm,
-      cl_maraichage_com_densite_numerique_pe,
-      cl_maraichage_com_densite_numerique_pehm,
       diagramme_vent,
+      table_tot_pe_alimentation,
       histo_surface_pe, 
       histo_distance_ce_pe,
       histo_distance_source_pe,
       histo_strahler_pe,
       histo_prct_intercept_pe,
+      bv_me_stat_q,
+      mod1, 
+      mod2,
       file = "data/outputs/w_autres_hypotheses.RData")
 
 load(file = "data/outputs/w_autres_hypotheses.Rdata")
+
