@@ -1,73 +1,88 @@
 ---
 title: "Caractéristiques générales et logiques d'implantation des surfaces élémentaires de plans d'eau de la zone d'étude"
-author: "Josselin BARRY"
-date: "2024-09-23"
+author: "Hélène ANQUETIL et Josselin BARRY"
+date: "2024-09-26"
 always_allow_html: true
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 ```
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 library(tidyverse)
 library(sf)
 library(units)
 library(mapview)
-library(kableExtra)
 library(dplyr)
+library(kableExtra)
 library(png)
+library(rstatix)
+library(ggpubr)
+library(UpSetR)
+library(ComplexUpset)
+library(vioplot) 
+
 
 source(file = "R/compter_sommer_surfaces_dans_polygone.R")
 source(file = "R/afficher_carte.R")
 
 load(file = "data/outputs/w_autres_hypotheses.RData")
 ```
-### Caractéristiques générales des surfaces en eau de plans d'eau 
+### Caractéristiques générales des surfaces élémentaires de plans d'eau 
+
+#### Répartition par territoire et par type de surface élémentaire
+
+```{r,}
+table_tot_synth_pe%>%
+  kbl() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), font_size = 12) 
+```
 
 #### Sur zones humides, sur cours, sur nappe, sur source ...
 
-Voici la répartition des surfaces en eau selon leur lien avec le réseau hydrographique : 
+Voici la répartition des surfaces élémentaires de plans d'eau selon leur lien avec le réseau hydrographique : 
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 diagramme_vent
 ```
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 table_tot_pe_alimentation %>%
   kbl() %>%
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), font_size = 12) 
 ```
+
 #### Superficie
 
 A l'échelle de la zone d'étude, la distribution de la superficie des surfaces élémentaires de plans d'eau est la suivante :
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 histo_surface_pe
 ```
 
 #### Distance au cours d'eau
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 histo_distance_ce_pe
 ```
 
 #### Distance à la source
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 histo_distance_source_pe
 ```
 
 #### Ordination de Strahler
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 histo_strahler_pe
 ```
 
 #### Proportion du linéaire hydrographique du bassin versant des masses d'eau intercepté par des plans d'eau
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 histo_prct_intercept_pe
 ```
 
@@ -75,7 +90,7 @@ histo_prct_intercept_pe
 
 Voici la carte lithologique simplifiée de la zone d'étude ((c)BRGM).
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 afficher_carte<-function(...){
   imageList<-list(...) ;   totalWidth<-0 ;   maxHeight<-0 ;   
   for (img in imageList){    if(is.character(img)) img<-readPNG(img) ;  dimg<-dim(img) ;  totalWidth<-totalWidth+dimg[2] ;   maxHeight<-max(maxHeight,dimg[1])  }
@@ -87,7 +102,7 @@ afficher_carte(readPNG('data/cartes/litho.png'))
 ```
 
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 table_litho_densite_pe %>%
   kbl() %>%
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), font_size = 12) 
@@ -99,49 +114,71 @@ Nous avons apparié par jointure spatiale la lithologie simplifiée aux surfaces
 
 Nous avons ainsi pu étudier la densité numérique de ces plans d'eau selon le type de lithologie simplifiée :
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 densite_numerique_pe_litho
 ```
 
 Ainsi que la densité surfacique de ces plans d'eau selon la lithologie simplifiée :
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 densite_surfacique_pe_litho
 ```
 
 La classe lithologique dont les densités sont les plus fortes est le Sable. Toutefois, nous pouvons ici percevoir l'influence des zones de marais, dont le nombre de surfaces élémentaires est très important.
 
-Nous avons donc recalculé ces densités, sans les surfaces élémentaires de plans d'eau situées en zone de marais (densité inter-région, hors marais : 2,64 pe/km²): 
+Nous avons donc recalculé ces densités, sans les surfaces élémentaires de plans d'eau situées en zone de marais (ni les mares) : 
 
-```{r message=FALSE, warning=FALSE}
-densite_numerique_pehm_litho
+```{r,}
+densite_numerique_pehm_hors_mares_litho
 ```
 
 De même pour la densité surfacique :
 
-```{r message=FALSE, warning=FALSE}
-densite_surfacique_pehm_litho
+```{r,}
+densite_surfacique_pehm_hors_mares_litho
 ```
 
 ##### Superficie selon la lithologie
 
-Nous avons écarté ici les mares et les marais pour étudier plus spécifiquement la surface des plans d'eau.
+Nous avons écarté ici les mares et les marais pour étudier plus spécifiquement la répartition de la superficie des plans d'eau en fonction de leur lithologie.
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
+boxsplot_surface_pehm_litho
+```
+
+On peut également l'observer sous forme de boîte à moustache (de type violon) :
+
+```{r,}
+pe_vf1 <- pe_vf %>%
+  filter(mare == 0 & zone_marais ==0) %>%
+  mutate(surface_ha = surface_m2/100000) 
+
+violin_surface_pehm_litho <- 
+  vioplot(pe_vf1$surface_ha~pe_vf1$lithologie,
+          main = "Répartition de la surface des plans d'eau \nselon leur classe lithologique",
+          xlab="Lithologie",
+          ylab="Surface (ha)",col="lightblue")
+```
+
+Ou comme au départ, en regardant d'une part la moyenne de ces superficies en fonction des classes lithologiques : 
+
+```{r,}
 surface_moyenne_pehm_litho
 ```
 
-Ainsi que la surface médiane selon la lithologie :
+Ainsi que la superficie médiane selon la lithologie :
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 surface_mediane_pehm_litho
 ```
 
-### Deux hypothèses autour de l'implantation des plans d'eau
+### Trois hypothèses autour de l'implantation des plans d'eau
 
 - L'implantation des plans d'eau est-t-elle liée  à la sévérité des étiages ?
 
 - L'implantation des plans d'eau est-t-elle liée au type de masse d'eau (densité plus forte en zone côtière et littorale) ?
+
+- L'implantation des plans d'eau est-t-elle liée au type d'Hydro-Eco-Régions ?
 
 #### L'implantation des plans d'eau est-elle liée à la "sévérité des étiages" ?
 
@@ -152,7 +189,7 @@ Nous avons apparié aux plans d'eau les débits moyens QMNA5 et QA, issus des ca
 
 ##### "Sévérité des étiages" (ratio q5/qa) de la zone d'étude
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 afficher_carte<-function(...){
   imageList<-list(...) ;   totalWidth<-0 ;   maxHeight<-0 ;   
   for (img in imageList){    if(is.character(img)) img<-readPNG(img) ;  dimg<-dim(img) ;  totalWidth<-totalWidth+dimg[2] ;   maxHeight<-max(maxHeight,dimg[1])  }
@@ -163,7 +200,7 @@ afficher_carte<-function(...){
 afficher_carte(readPNG('data/cartes/ratio_debits.png'))
 ```
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 table_bv_me_q %>%
   kbl() %>%
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), font_size = 12)
@@ -171,12 +208,12 @@ table_bv_me_q %>%
 
 Voici la répartition des bassins versants des masses d'eau et des communes de la zone d'étude en fonction du ratio entre leur plus fort débit d'étiage et leur plus fort débit de module (à l'exutoire pour les masses d'eau) : 
 
-```{r message=FALSE, warning=FALSE}
+```{r, fig.cap = "1/40 = 0,025 - 1/20ème = 0,05 - 1/10ème = 0,1"}
 repartition_bv_rh
 ```
 
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 repartition_com_rh
 ```
 
@@ -185,25 +222,25 @@ repartition_com_rh
 
 Nous avons calculé, à l'échelle du bassin versant des masses d'eau, les densités en plans d'eau en fonction de 4 principales classes de ratio de débit : 
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 densite_numerique_pe_rh
 ```
 
 Comparativement, sans les mares et les marais :
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 densite_numerique_pehm_rh
 ```
 
 Nous avons également calculé les densité surfaciques :
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 densite_surfacique_pe_rh
 ```
 
 Et de même sans les mares et les marais : 
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 densite_surfacique_pehm_rh
 ```
 
@@ -211,39 +248,39 @@ densite_surfacique_pehm_rh
 
 Enfin il nous a paru intéressant de regarder la répartition des densités numériques et surfaciques en plans d'eau (hors mares et marais) du bassin-versant des masses d'eau en fonction de la sévérité de leurs étiages : 
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 densite_numerique_pehm_rh_bvme_logx
 ```
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 densite_surfacique_pehm_rh_bvme_logx
 ```
 
-Une analyse statistique du lien de corrélation entre la densité numérique en plans d'eau (hors mares et marais) et le ratio de débit (étiage et module) montre cependant (pour les masses d'eau cours d'eau dont la distance de cook est inférieure à 0,01) que :
+Une analyse statistique du lien de corrélation entre la densité numérique en plans d'eau (hors mares et marais) et le ratio de débit (étiage et module) montre (pour les masses d'eau de type cours d'eau, dont la distance de cook est inférieure à 4/n) que :
 
-- "p value" = 4,143e-13
-- "R² ajusté" = 0,05818
+- "p-value" < 2.2e-16
+- "R² ajusté" = 0.1037
 
-Ce qui indique que la significativité de ce lien de corrélation est très faible.
+Il existe donc un lien significatif,  de relation inverse, entre le ratio de débit et la densité numérique de plans d'eau : les bassins versant des masses d'eau dans lesquels les étiages sont les plus sévères sont également ceux qui statistiquement ont les densités numériques de plan d'eau les plus forte.
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 plot(mod1)
 ```
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 summary(mod2)
 ```
 ##### Répartition des plans d'eau selon ce ratio de débit
 
 Voici la répartition des **plans d'eau ayant pu bénéficier d'un appariement de valeurs de débits**, en fonction de leur ratio Q5/Module (30593 surfaces élémentaires de plans d'eau retenues sur 208593 surfaces élémentaires de plans d'eau totales).
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 repartition_pe_rh
 ```
 
 En écartant les mares et les marais :
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 repartition_pehm_rh
 ```
 
@@ -251,25 +288,25 @@ repartition_pehm_rh
 
 Surface moyenne :
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 surface_moyenne_pe_rh
 ```
 
 Sans les mares et marais :
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 surface_moyenne_pehm_rh
 ```
 
 Surface médiane :
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 surface_mediane_pe_rh
 ```
 
 Sans les mares et marais:
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 surface_mediane_pehm_rh
 ```
 
@@ -277,7 +314,7 @@ surface_mediane_pehm_rh
 
 ##### Type de masses d'eau de la zone d'étude
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 afficher_carte<-function(...){
   imageList<-list(...) ;   totalWidth<-0 ;   maxHeight<-0 ;   
   for (img in imageList){    if(is.character(img)) img<-readPNG(img) ;  dimg<-dim(img) ;  totalWidth<-totalWidth+dimg[2] ;   maxHeight<-max(maxHeight,dimg[1])  }
@@ -290,7 +327,7 @@ afficher_carte(readPNG('data/cartes/type_masse_deau.png'))
 
 Sont écartées de cette hypothèse les masses d'eau plan d'eau.
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 table_bv_me_type %>%
   kbl() %>%
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), font_size = 12)
@@ -300,15 +337,68 @@ table_bv_me_type %>%
 
 Nous avons ici étudié les densité de plans d'eau en fonction des types de masses d'eau :
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 densite_numerique_pe_type
 ```
 
 En limitant aux plans d'eau hors mares et marais :
 
-```{r message=FALSE, warning=FALSE}
+```{r,}
 densite_numerique_pehm_type
 ```
 
 On relève ici encore l'influence des secteurs de marais en zone côtière. 
 L'analyse de la densité numérique de plans d'eau en fonction du type de masse d'eau, en l'absence des mares et des marais, indique qu'il y a relativement plus de plans d'eau en masses d'eau "Cours d'eau" qu'en masses d'eau "Côtières" ou de transition.   
+
+#### L'implantation des plans d'eau est-elle liée aux Hydro Eco Régions (HER) ?
+
+##### Les HER de niveau 2 de la zone d'étude
+
+```{r,}
+afficher_carte<-function(...){
+  imageList<-list(...) ;   totalWidth<-0 ;   maxHeight<-0 ;   
+  for (img in imageList){    if(is.character(img)) img<-readPNG(img) ;  dimg<-dim(img) ;  totalWidth<-totalWidth+dimg[2] ;   maxHeight<-max(maxHeight,dimg[1])  }
+  par(mar=c(0,0,0,0)) ;   plot(c(0,totalWidth),c(0,maxHeight),type="n",asp=1,xaxt="n",yaxt="n",xlab="x",ylab="y") ;   offset<-0 ; 
+  for (img in imageList){    dimg<-dim(img) ;    rasterImage(img,offset,0,offset+dimg[2],dimg[1])
+  offset<-offset+dimg[2]  }}
+
+afficher_carte(readPNG('data/cartes/her.png'))
+```
+
+```{r,}
+table_her_densite_pe %>%
+  kbl() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), font_size = 12)
+```
+
+#### Densités de plans d'eau en fonction des hydro éco régions
+
+Nous avons ici étudié les densité de plans d'eau en fonction des HER :
+
+```{r,}
+densite_numerique_pe_her
+```
+
+En limitant aux plans d'eau hors mares et marais :
+
+```{r,}
+densite_numerique_pehm_hors_mares_her
+```
+
+Et les densités surfaciques : 
+
+```{r,}
+densite_surfacique_pe_her
+```
+
+En limitant aux plans d'eau hors mares et marais :
+
+```{r,}
+densite_surfacique_pehm_hors_mares_her
+```
+
+Et enfin la répartition de la superficie des surfaces élémentaires de plans d'eau, en fonction de la HER (limitée aux plans d'eau de moins de 500ha) :
+
+```{r,}
+densite_surfacique_pe_her
+```
