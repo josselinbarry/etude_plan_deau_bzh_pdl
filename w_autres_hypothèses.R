@@ -328,7 +328,7 @@ ggplot(pe_taille,
   ylim(0,1500)
 
 pe_vf1 <- pe_vf %>%
-  filter(mare == 0 & zone_marais ==0) %>%
+  filter(mare == 0 & zone_marais ==0 & Persistanc == "permanent") %>%
   mutate(surface_ha = surface_m2/100000) 
 
 pe_vf2 <- pe_vf %>%
@@ -342,11 +342,32 @@ pe_vf3 <- pe_vf %>%
 
 filter(lithologie == 'Ophiolites')
 
+violin_surface_pehm_litho2 <- 
+  ggplot(data= pe_vf1,
+         aes(x = fct_rev(lithologie),
+             y = surface_m2)) +
+  geom_violin() +
+  coord_flip() +
+  scale_y_log10(labels = function(x) format(x, scientific = FALSE, big.mark = " ")) +
+  labs(y = "Superficie (m²), échelle log",
+       x = "Lithologie")
+
+violin_surface_pehm_litho2
+
+quantile(pe_vf1$surface_ha)
+
+pe_vf1 %>% 
+  st_drop_geometry() %>% 
+  sample_n(10) %>% 
+  pull(surface_ha)
+
 violin_surface_pehm_litho <- 
   vioplot(pe_vf1$surface_ha~pe_vf1$lithologie,
           main = "Répartition de la surface des plans d'eau \nselon leur classe lithologique",
           xlab="Lithologie",
-          ylab="Surface (ha)",col="lightblue")
+          ylab="Surface (ha)",col="lightblue") + coord_flip() 
+
+
 
 violin_surface_pehm_litho_hors_schistes <- 
   vioplot(pe_vf3$surface_ha~pe_vf3$lithologie,
@@ -1933,7 +1954,8 @@ pe_select <- pe_select %>%
          -connecte_nappe,
          -zhp)
 
-diagramme_vent <- upset(pe_select,
+diagramme_vent <- upset(data = pe_select,
+                       # number.angles = 90,
                         c("Sur cours", "Sur source", "Sur nappe", "Sur zone humide"),
                         name = "Alimentation des plans d'eau en régions\nBretagne et Pays-de-la-Loire",
                         queries = list(upset_query(set = 'Sur cours', fill='darkblue'),
@@ -1962,7 +1984,7 @@ diagramme_vent <- upset(pe_select,
                         sort_sets = 'descending',
                         sort_intersections = 'descending')
 
-
+diagramme_vent
 
 ## Table des plans d'eau et du réseau hydro ----
 
@@ -2341,6 +2363,58 @@ histo_surface_pe <-
 
 histo_surface_pe
 
+test_histo_surface_pe_persistance <- pe %>% 
+ # sample_n(10000) %>% 
+  ggplot(aes(x = surface_m2,
+             fill = Persistanc)
+         ) +
+  geom_histogram(bins = 50, position = "dodge") + 
+  # geom_density(alpha = 0.3, position = "stack") +
+  scale_fill_manual(values = c("#fb01ff", "#18d0f0", "#2374ee")) +
+  labs(
+    x = "Superficie des plans d'eau",
+    y = "Nombre de plans d'eau",
+    title = str_wrap("Répartition des plans d'eau selon leur superficie", width=50)) +
+  scale_x_log10()
+
+test_histo_surface_pe_persistance <-
+ggplot(pe) +
+  aes(x = coalesce(surface_m2,0), fill = Persistanc) +
+  geom_bar() +
+  xlab("Superficie (m²)") +
+  ylab("Nombre de plans d'eau") +
+  labs(fill = "Type de pesistance")
+
+repartition_pe_litho_persistance <-
+ggplot(pe) +
+  aes(x = fct_rev(lithologie), fill = Persistanc) +
+  geom_bar(position = "fill") +
+  xlab("Lithologie") +
+  ylab("Proportion") +
+  labs(fill = "Persistance") +
+  scale_y_continuous(labels = scales::percent) +
+  theme(axis.text.x=element_text(angle=30, hjust=1, vjust=1)) +
+  coord_flip()
+
+pe_vf_ratio <- pe %>%
+  left_join(bv_me %>%
+              filter(!is.na(Q5MOY_max) & Q5MOY_max != ''& Q5MOY_max>=0) %>%
+              st_drop_geometry() %>%
+              select(cdeumassed, QAMOY_max, Q5MOY_max),
+            join_by( 'cd_me'== 'cdeumassed')) %>%
+  mutate(ratio_q5_qa = Q5MOY_max/QAMOY_max) %>%
+  filter(!is.na(QAMOY_max))
+
+repartition_pe_ratio_persistance <-
+  ggplot(pe_vf_ratio %>%
+           filter(!is.na(Q5MOY_max))) +
+  aes(x = ratio_q5_qa, fill = Persistanc) +
+  geom_bar(position = "fill") +
+  xlab("Ratio de débits") +
+  ylab("Proportion") +
+  labs(fill = "Persistance") +
+  scale_y_continuous(labels = scales::percent) 
+
 ## Distance au cours d'eau des PE ----
 
 histo_distance_ce_pe <-
@@ -2374,7 +2448,8 @@ histo_strahler_pe <-
   labs(
     x = "Rang de Strahler du plus proche cours d'eau",
     y = "Nombre de plans d'eau",
-    title = "Répartition des plans d'eau selon le rang de Strahler du plus proche cours \nd'eau", width=40)
+    title = "Répartition des plans d'eau selon le rang de Strahler du plus proche cours \nd'eau", width=40) +
+  scale_x_continuous(breaks = 1:8)
 
 ## Linéaire intercepté des me ----
 
@@ -2543,19 +2618,36 @@ save( pe_vf,
 save(table_bv_me_q,
      file = "data/outputs/echantillon.RData")
 
+pe_data <- pe %>%
+  st_drop_geometry()
+
+object.size(pe_select)
+
+save(pe_select, 
+     file = "data/outputs/pe_select.RData")
+
 load(file = "data/outputs/w_autres_hypotheses.Rdata")
 
 
 
 ### IDEES PASCAL : ----
+- Réduire la taille des nombre dans le diaggrame de vent
+- Incliner la légende ds vioplot
+- Analyse stat OK ?
+- dernier test répartition pe selon surface et persistanc
+- dernier test prop pe selon presistance et ratio de débit
   
+diagramme en baton lolipop -> ?  
 fig.cap = "texte de légende" -> marche pas
-attention unités de légende -> nan ca va
-diagramme en baton lolipop -> ?
-démarer x à 0 -> ?
 breaks = 1:8 labels = 1:8 -> ca marche pas
-OK = 4/n ou n est l'échantillon => <0.046 -> reprendre l'analyse
 tester régression non paramétriques => test de mac-kendal -> ?
+  
+  
+  
+démarer x à 0 -> xlim(0,z)
+
+OK = 4/n ou n est l'échantillon => <0.046 -> reprendre l'analyse
+
 OK = pvalue 4e-13 => lien significatif de relation inverse, les BVME dans lesquels les étiages sont les plus sévères sont également ceux qui statistiquement ont les densités numériques de plan d'eau les plus forte.
 (enlever densité surfacique)
 modele + complexe => densite en fonction (litho + ratio_debit)
