@@ -2927,11 +2927,6 @@ me_ce <- bv_me %>%
 percentiles_intercept_bv <-
   quantile(me_ce$prop_lin_intercept, c(.10, .25, .50, .75, .90)) 
 
-
-
-
-<span style ="color: #26B260"> 
-
 percentiles_superficie <-
   quantile(pe_tot$surface_m2, c(.01, .10, .20, .40, .50, .60, .80, .90, .99)) 
   data.frame(rename(surface_m2 = .))
@@ -3186,16 +3181,4 @@ save( pe_vf,
       file = "data/outputs/w_autres_hypotheses.RData")
 
 load(file = "data/outputs/w_autres_hypotheses.Rdata")
-
-### IDEES PASCAL : ----
-- Incliner la légende ds vioplot
-- Analyse stat OK ?
-- mettre une photo daccueuil
-  
-diagramme en baton lolipop -> ?  
-fig.cap = "texte de légende" -> marche pas
-tester régression non paramétriques => test de mac-kendal -> ?
-
-modele + complexe => densite en fonction (litho + ratio_debit)
-surface en fonction de la litho => boxplot qui exprime en même temps moyenne et médiane
 
