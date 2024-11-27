@@ -1,0 +1,727 @@
+---
+title: "Caractéristiques générales et logiques d'implantation des surfaces élémentaires de plans d'eau de la zone d'étude"
+author: "Hélène ANQUETIL et Josselin BARRY"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+always_allow_html: true
+output:
+  html_document:
+    toc: true 
+    toc_depth: 3 
+    toc_float: true 
+    number_sections: true  
+    theme: cerulean 
+    highlight: tango 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+```{r,}
+library(tidyverse)
+library(sf)
+library(units)
+library(mapview)
+library(dplyr)
+library(kableExtra)
+library(png)
+library(rstatix)
+library(ggpubr)
+library(UpSetR)
+library(ComplexUpset)
+library(vioplot) 
+library(plotly)
+
+source(file = "R/compter_sommer_surfaces_dans_polygone.R")
+source(file = "R/afficher_carte.R")
+
+load(file = "data/outputs/w_autres_hypotheses.RData")
+```
+
+```{r,}
+afficher_carte<-function(...){
+  imageList<-list(...) ;   totalWidth<-0 ;   maxHeight<-0 ;   
+  for (img in imageList){    if(is.character(img)) img<-readPNG(img) ;  dimg<-dim(img) ;  totalWidth<-totalWidth+dimg[2] ;   maxHeight<-max(maxHeight,dimg[1])  }
+  par(mar=c(0,0,0,0)) ;   plot(c(0,totalWidth),c(0,maxHeight),type="n",asp=1,xaxt="n",yaxt="n",xlab="x",ylab="y") ;   offset<-0 ; 
+  for (img in imageList){    dimg<-dim(img) ;    rasterImage(img,offset,0,offset+dimg[2],dimg[1])
+  offset<-offset+dimg[2]  }}
+
+afficher_carte(readPNG('data/cartes/illustration_rapport_danalyse.PNG'))
+```
+
+Ce rapport d’analyse est un des livrables de l’étude cartographique menée par la direction Bretagne de l’Office Français de la Biodiversité ; il a vocation à présenter certains résultats et des pistes d’analyse des caractéristiques et logiques d’implantation des plans d’eau en Bretagne et Pays de la Loire. 
+
+L’ensemble des livrables et données associées à cette étude sont récapitulés au [chapitre 6](#pour-aller_plus-loin) de ce rapport.
+
+# Caractéristiques générales des surfaces élémentaires de plans d'eau 
+
+Dans ce document, sont considérés comme synonymes les termes **surfaces élémentaires de plans d'eau** et **plans d'eau**. 
+
+**Point de vigilance** : les surfaces élémentaires de plans d’eau définies dans la [BD Topage](https://www.sandre.eaufrance.fr/atlas/srv/api/records/7fa4c224-fe38-4e2c-846d-dcc2fa7ef73e) peuvent être contigües et constituer un seul et même plan d’eau dans la réalité (une à plusieurs parties permanentes ainsi qu'une à plusieurs parties intermitentes). Ce cas de figure reste minoritaire en nombre, mais tend notamment à biaiser les analyses associées à la superficie des plans d’eau, particulièrement pour les plans d'eau des "masses d’eau plans d’eau" qui peuvent être morcelés en plusieurs surfaces élémentaires de plans d’eau.
+
+Pour plus d'informations sur les surfaces élémentaires se référer au [dictionnaire des données de la BD Topage](https://id.eaufrance.fr/ddd/ETH/latest). 
+
+La **zone d'étude** comprend les régions Bretagne et Pays de la Loire ainsi que les territoires des Schémas d’Aménagement et de Gestion des Eaux (SAGE) limitrophes. Ce territoire peut également être intitulé "Bretagne et Pays de la Loire élargis" dans ce document. Cette zone couvre 995 masses d'eau et 3 054 communes : 
+
+```{r,}
+afficher_carte<-function(...){
+  imageList<-list(...) ;   totalWidth<-0 ;   maxHeight<-0 ;   
+  for (img in imageList){    if(is.character(img)) img<-readPNG(img) ;  dimg<-dim(img) ;  totalWidth<-totalWidth+dimg[2] ;   maxHeight<-max(maxHeight,dimg[1])  }
+  par(mar=c(0,0,0,0)) ;   plot(c(0,totalWidth),c(0,maxHeight),type="n",asp=1,xaxt="n",yaxt="n",xlab="x",ylab="y") ;   offset<-0 ; 
+  for (img in imageList){    dimg<-dim(img) ;    rasterImage(img,offset,0,offset+dimg[2],dimg[1])
+  offset<-offset+dimg[2]  }}
+
+afficher_carte(readPNG('data/cartes/zone_d_etude.PNG'))
+```
+
+Cette zone d'étude comporte `r nrow(pe_tot) %>% format(scientific=FALSE, big.mark=" ")` surfaces élémentaires de plans d'eau dont `r nrow(pe_bzh_pdl) %>% format(scientific=FALSE, big.mark=" ")` sont situées en Bretagne et Pays de la Loire (soit `r round(nrow(pe_bzh_pdl)*100/nrow(pe_tot))`% du jeu de données).
+
+## Différentes catégories de surfaces élémentaires de plans d'eau
+
+Il est possible d'identifier plusieurs catégories de surfaces élémentaires de plans d'eau, qu'il conviendra par la suite de distinguer dans les analyses réalisées : 
+
+* **Persistance de la Surface élémentaire** : degré de persistance de l'écoulement en eau ; peut-être _permanent_, _intermittent_ ou _inconnue_. Les surfaces élémentaires de plans d’eau qualifiées d’intermittentes se rencontrent fréquemment sur les parties marnantes de grands plans d’eau, notamment des masses d’eau plans d’eau comme le Lac de Grand-Lieu ; certains petits plans d’eau isolés peuvent également être qualifiés d’intermittents.
+Par soucis de clarté dans la représeantation des données, les surfaces élémentaires dont la persistance est _inconnue_ sont soustraites aux analyses ayant trait à ce paramètre (seulement `r nrow(persistance_inconnue_null) %>% format(scientific=FALSE, big.mark=" ")` surfaces élémentaires sur la zone d'étude).
+
+* **Surface élémentaire "Mare"** : surface élémentaire de plan d'eau de moins de 500m² qui n'est pas directement connectée au réseau hydrographique et dont le type n'est pas un bassin de pisciculture, une gravière, une retenue de plan d'eau ou un réservoir.
+
+* **Surface élémentaire "en zone de marais"** : surface élémentaire de plan d'eau située en zone de marais, telle que retenue dans le cadre de l'étude (numérisation à partir du scan25, IGN).
+
+Pour plus d'informations sur les modalités de construction, se référer aux [métadonnées de la couche des surfaces élémentaires de plan d'eau](https://data.ofb.fr/catalogue/Donnees-geographiques-OFB/fre/catalog.search#/metadata/1f460b9f-b3bf-46bb-b4a4-f5a5572a9d1f) 
+
+Voici la répartition des surfaces élémentaires de plans d'eau selon leur appartenance ou non à l'une de ces catégories dans la zone d'étude :
+
+```{r,}
+diagramme_vent_mares_marais
+```
+
+On dénombre, sur la zone d'étude, un total de `r nrow(pe_tot) %>% format(scientific=FALSE, big.mark=" ")` surfaces élémentaires de plans d’eau, parmi lesquelles :
+
+* `r nrow(pe_perm) %>% format(scientific=FALSE, big.mark=" ")` sont qualifiées comme permanentes (`r round(nrow(pe_perm)*100/nrow(pe_tot))`%),
+* `r nrow(pe_mare) %>% format(scientific=FALSE, big.mark=" ")` sont assimilées à des mares (`r round(nrow(pe_mare)*100/nrow(pe_tot))`%),
+* `r nrow(pe_marais) %>% format(scientific=FALSE, big.mark=" ")` sont dénombrées en zone de marais (`r round(nrow(pe_marais)*100/nrow(pe_tot))`%).
+
+**Certains plans d’eau peuvent cumuler plusieurs catégories**. La catégorie la plus représentée concerne les plans d’eau permanents, n’étant ni des mares, ni situés en zone de marais, avec `r nrow(pe_perm_hors_mares_marais) %>% format(scientific=FALSE, big.mark=" ")` surfaces élémentaires de plans d’eau (soit `r round(nrow(pe_perm_hors_mares_marais)*100/nrow(pe_tot))`% de l'ensemble). 
+
+Les densités de plans d’eau en zones de marais étant plus élevées qu’ailleurs (`r round(marais_zone_etude$dens_num_pe_tot, 1)` surfaces élémentaires de plans d’eau / km² de marais et une densité surfacique de `r round(marais_zone_etude$dens_surf_pe_tot, 1)`%), certains calculs de densité excluent ces zones.
+
+**Synthèse par échelle de territoire :**
+
+```{r,}
+table_tot_synth_pe%>%
+  kbl() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), font_size = 12) 
+```
+A noter que les densités "hors marais" sont calculées en déduisant de la superficie du territoire, la superficie retenue en zone de marais. 
+
+## Sur zones humides, sur cours, sur nappe, sur source ...
+
+Plusieurs modes d'alimentation en eau des plans d'eau sont possibles : 
+
+* **Surface élémentaire "en zone humide"** : surface élémentaire de plan d'eau qui intersecte une zone humide identifiée dans la [couche seuillée de pré-localisation des zones humides](https://inpn.mnhn.fr/telechargement/cartes-et-information-geographique/mh/zh) (MNHN, probabilité de présence supérieure à 0).
+
+* **Surface élémentaire "sur nappe"** : surface élémentaire de plan d’eau qui intersecte avec les zones d’alluvions et la plupart des zones de colluvions de la [BD CHARM](https://infoterre.brgm.fr/formulaire/telechargement-cartes-geologiques-departementales-150-000-bd-charm-50) (BRGM).
+
+* **Surface élémentaire "sur cours"** : surface élémentaire de plan d’eau qui intersecte le linéaire hydroagraphique de la BD Topage (IGN, OFB).
+
+* **Surface élémentaire "sur source"** : surface élémentaire de plan d’eau située à 50m maximum d’une source identifiée dans les nœuds hydrographiques de la BD Topage (IGN, OFB).
+
+Pour plus d'informations sur les modalités de construction, se référer aux [métadonnées de la couche des surfaces élémentaires de plan d'eau](https://data.ofb.fr/catalogue/Donnees-geographiques-OFB/fre/catalog.search#/metadata/1f460b9f-b3bf-46bb-b4a4-f5a5572a9d1f)
+
+Voici la répartition des **surfaces élémentaires de plans d'eau hors mares et marais** selon leur lien avec le réseau hydrographique (mode d'alimentation en eau) :
+
+```{r,}
+diagramme_vent
+```
+
+On dénombre, sur la zone d'étude, un total de `r nrow(pe_hors_mares_marais) %>% format(scientific=FALSE, big.mark=" ")` surfaces élémentaires de plans d’eau (soit `r round(nrow(pe_hors_mares_marais)*100/nrow(pe_tot))`%), qui sont hors mares, marais, parmi lesquelles : 
+
+* `r round(nrow(pe_hors_mares_marais_zh)*100/nrow(pe_hors_mares_marais))`% (soit `r nrow(pe_hors_mares_marais_zh) %>% format(scientific=FALSE, big.mark=" ")`) sont implantées en zone humide ;
+* `r round(nrow(pe_hors_mares_marais_connecte)*100/nrow(pe_hors_mares_marais))`% (soit `r nrow(pe_hors_mares_marais_connecte) %>% format(scientific=FALSE, big.mark=" ")`), sont dites « connectées » au réseau hydrographique puisque situées soit directement sur cours d’eau, soit à proximité d’une source de cours d’eau, soit sur la nappe associée au cours d’eau (indépendamment de leur présence ou non en zone humide).
+
+Parmi ces surfaces élémentaires de plans d’eau connectées (hors mares et marais) :
+
+* `r round(nrow(pe_hors_mares_marais_connecte_l)*100/nrow(pe_hors_mares_marais_connecte))`% (soit `r nrow(pe_hors_mares_marais_connecte_l) %>% format(scientific=FALSE, big.mark=" ")`) sont implantées directement sur cours d’eau ;
+* seulement `r round(nrow(pe_hors_mares_marais_connecte_l_s_n)*100/nrow(pe_hors_mares_marais_connecte))`% (soit `r nrow(pe_hors_mares_marais_connecte_l_s_n) %>% format(scientific=FALSE, big.mark=" ")`) cumulent les trois types d’alimentation en eau, à savoir sur cours, sur nappe et sur source.
+
+La proportion de surfaces élémentaires de plans d’eau connectées varie peu selon les départements, entre un maximum de `r round(nrow(pe_hors_mares_marais_connecte_56)*100/nrow(pe_hors_mares_marais_56))`% dans le Morbihan et un minimum de `r round(nrow(pe_hors_mares_marais_connecte_44)*100/nrow(pe_hors_mares_marais_44))`% en Loire-Atlantique (en raison notamment du fait que les zones de marais ont été exclues de ce calcul, alors qu’elles sont densément équipées en surfaces élémentaires de plans d’eau).
+
+Enfin, seulement `r round(nrow(pe_hors_mares_marais_hors_zh_connecte)*100/nrow(pe_hors_mares_marais))`% (soit `r nrow(pe_hors_mares_marais_hors_zh_connecte) %>% format(scientific=FALSE, big.mark=" ")`) ne sont ni sur zone humide, ni connectées au réseau hydrographique. 
+
+**Synthèse par échelle de territoire** :
+
+```{r,}
+table_tot_pe_alimentation %>%
+  kbl() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), font_size = 12) 
+```
+
+## Superficie des surfaces élémentaires de plans d'eau
+
+A l'échelle de la zone d'étude, la distribution de la superficie des `r nrow(pe_tot) %>% format(scientific=FALSE, big.mark=" ")` surfaces élémentaires de plans d'eau est la suivante (échelle log), le choix a été fait de distinguer les superficies selon la persistance du plan d’eau (sauf `r nrow(persistance_inconnue_null) %>% format(scientific=FALSE, big.mark=" ")` entités de persistance inconnue) :
+
+```{r,}
+ggplotly(histo_surface_pe_persistance)
+```
+
+La superficie moyenne est de `r round(view(superficie_moy)) %>% format(scientific=FALSE, big.mark=" ")`m² et la superficie médiane de `r round(view(superficie_med)) %>% format(scientific=FALSE, big.mark=" ")`m².
+
+* `r round(nrow(pe_infeg500)*100/nrow(pe_tot))`% des surfaces élémentaires ont une superficie inférieure ou égale à 500 m² ;
+* `r round(nrow(pe_sup500_inf1000)*100/nrow(pe_tot))`% des surfaces élémentaires ont une superficie comprise entre 500 m² et 1000 m² (exclu) ;
+* `r round(nrow(pe_sup1000)*100/nrow(pe_tot))`% des surfaces élémentaires ont une superficie supérieure ou égale à 1000 m². 
+
+La répartition par percentile des surfaces élémentaires de plans d'eau de la zone d'étude, en fonction de leur superficie, est la suivante : 
+
+```{r,}
+percentiles_superficie_pe%>%
+  as.data.frame() %>%
+  kbl() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), font_size = 12) 
+```
+
+## Surfaces élémentaires de plans d'eau et réseau hydrographique
+
+### Distance au plus proche cours d'eau
+
+```{r,}
+ggplotly(histo_distance_ce_pe_persistance) %>%
+  config(locale = "fr")
+```
+
+La distance moyenne au plus proche cours d'eau est de `r round(view(distance_ce_moy))`m et la distance médiane de `r round(view(distance_ce_med))`m.
+
+* `r round(nrow(pe_dist_ce_10)*100/nrow(pe_tot))`% des surfaces élémentaires de plans d’eau sont situées à 10m ou moins d’un cours d’eau (dont `r round(nrow(pe_dist_ce_10_perm)*100/nrow(pe_dist_ce_10))`% permanentes et `r round(nrow(pe_dist_ce_10_int)*100/nrow(pe_dist_ce_10))`% intermittentes) ;
+* `r round(nrow(pe_dist_ce_35)*100/nrow(pe_tot))`% sont situées à 35m ou moins d’un cours d’eau ;
+* `r round(nrow(pe_dist_ce_100)*100/nrow(pe_tot))`% sont situées à 100m ou moins d’un cours d’eau ;
+* seulement `r round(nrow(pe_dist_ce_sup1000)*100/nrow(pe_tot))`% sont situées à plus d’un kilomètre d’un cours d’eau.
+
+La répartition par percentile des surfaces élémentaires de plans d'eau de la zone d'étude, en fonction de la distance au plus proche cours d'eau, est la suivante : 
+
+```{r,}
+percentiles_dist_ce%>%
+  as.data.frame() %>%
+  kbl() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), font_size = 12) 
+```
+
+### Distance à la source la plus proche
+
+```{r,}
+ggplotly(histo_distance_source_pe_persistance) %>%
+  config(locale = "fr")
+```
+
+La distance moyenne à la source la plus proche est de `r round(view(distance_source_moy))`m et la distance médiane de `r round(view(distance_source_med))`m.
+
+* `r round(nrow(pe_dist_source_100)*100/nrow(pe_tot))`% des surfaces élémentaires de plans d’eau de la zone d’étude sont situés à 100m ou moins d’une source.
+
+La répartition par percentile des surfaces élémentaires de plans d'eau de la zone d'étude, en fonction de la distance à la source la plus proche, est la suivante : 
+
+```{r,}
+percentiles_dist_source%>%
+  as.data.frame() %>%
+  kbl() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), font_size = 12) 
+```
+
+### Ordination de Strahler du plus proche cours d'eau
+
+#### Nombre de plans d'eau par rang de Strahler du plus proche cours d'eau
+
+Nous avons apparié le rang de Strahler du plus proche cours d'eau de chaque surface élémentaire de plans d'eau (qu'il soit sur cours ou non) afin d'étudier la répartition des surfaces élémentaires de plans d'eau selon l'arborescence du linéaire hydrographique.
+
+```{r,}
+ggplotly(histo_strahler_pe_persistance) %>%
+  config(locale = "fr")
+```
+
+Il y a `r nrow(pe_tdbv) %>% format(scientific=FALSE, big.mark=" ")` surfaces élémentaires de plans d'eau qui sont situées en rang 1 ou 2 de Strahler que l'on peut donc considérer comme étant situées en "tête de bassin versant", ce qui représente `r round(round(nrow(pe_tdbv)*100/nrow(pe_tot)))`% de l'ensemble des surfaces élémentaires de plans d'eau (dont `r round(round(nrow(pe_rang1)*100/nrow(pe_tdbv)))`% en rang 1).
+
+#### Densité linéaire de plans d'eau par rang de Strahler du plus proche cours d'eau
+
+Il nous a paru intéressant d'affiner cette première distribution en proposant une représentation par densité linéaire, qui consiste à diviser le nombre de surfaces élémentaires de plans d'eau par le linéaire cumulé de chacun des rangs de strahler de la zone d'étude. 
+
+```{r,}
+histo_dens_lin_strahler
+```
+
+Le nombre de surfaces élémentaires de plans d’eau proches d’un rang 1 ramené au linéaire total de cours d’eau de rang 1 dans la zone d’étude est bien supérieur à celui des autres rangs (`r round(dens_strahler_r1$dens_num_pe, 1)` surfaces élémentaires de plans d’eau par km de cours d’eau de rang 1, contre `r round(dens_strahler_r2$dens_num_pe, 1)` plans d’eau par km de cours d’eau de rang 2 pour atteindre `r round(dens_strahler_r8$dens_num_pe, 1)` plans d’eau par km de cours d’eau de rang 8).
+
+### Linéaire hydrographique intercepté par des plans d'eau
+
+Le linéaire hydrographique intercepté par les plans d’eau rend compte du fait que les plans d’eau sur cours ont été implantés en lieu et place de cours d’eau préexistants.
+
+Il y a `r nrow(pe_intercept) %>% format(scientific=FALSE, big.mark=" ")` surfaces élémentaires de plans d'eau sur la zone d'étude qui sont considérées sur cours et interceptent l'écoulement naturel d'un cours d'eau, soit `r round(nrow(pe_intercept)*100/nrow(pe_tot))`% de l'ensemble des surfaces élémentaires de plans d'eau.
+Voici, pour ces plans d'eau, la distribution  de la longueur de linéaire intercepté :
+
+```{r,}
+ggplotly(histo_intercept_pe) %>%
+  config(locale = "fr")
+```
+
+Pour ces plans d'eau dits "sur cours", la longueur moyenne de linéaire hydrographique interceptée est de `r round(view(longueur_intercept_moy))`m et la longueur médiane `r round(view(longueur_intercept_med))`m.
+
+### Proportion du linéaire hydrographique du bassin versant des masses d'eau intercepté par des plans d'eau
+
+Nous avons ici calculé la proportion du linéaire de réseau hydrographique intercepté par un plan d'eau par rapport au linéaire total du bassin versant de la masse d'eau.
+
+Voici la répartition des masses d'eau selon le taux d'interception de leur linéaire hydrographique :
+
+```{r,}
+ggplotly(histo_prct_intercept_pe_type) %>%
+  config(locale = "fr")
+```
+
+Le taux d’interception des cours d’eau par les plans d’eau est logiquement plus important pour les masses d’eau plans d’eau, constituées la plupart du temps par de grandes retenues en barrage provoquant l’ennoiement plus ou moins étendu du bassin versant amont et de son chevelu de cours d’eau.  
+
+La proportion moyenne de linéaire hydrographique interceptée **hors masses d'eau plan d'eau** est de `r round(view(prop_intercept_bv_moy))`% et la proportion médiane `r round(view(prop_intercept_bv_med))`%.
+
+La répartition par percentile des bassins versant de masses d'eau, en fonction de la proportion de leur linéaire hydrographique intercepté par un plan d'eau, est la suivante :
+
+```{r,}
+percentiles_intercept_bv %>%
+  as.data.frame() %>%
+  kbl() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), font_size = 12) 
+```
+
+# Implantation des surfaces élémentaires de plans d'eau et lithologie 
+
+## Classes lithologiques simplifiées de la zone d'étude
+
+Voici la **carte lithologique simplifiée** de la zone d'étude (&#9400;BRGM).
+
+```{r,}
+afficher_carte<-function(...){
+  imageList<-list(...) ;   totalWidth<-0 ;   maxHeight<-0 ;   
+  for (img in imageList){    if(is.character(img)) img<-readPNG(img) ;  dimg<-dim(img) ;  totalWidth<-totalWidth+dimg[2] ;   maxHeight<-max(maxHeight,dimg[1])  }
+  par(mar=c(0,0,0,0)) ;   plot(c(0,totalWidth),c(0,maxHeight),type="n",asp=1,xaxt="n",yaxt="n",xlab="x",ylab="y") ;   offset<-0 ; 
+  for (img in imageList){    dimg<-dim(img) ;    rasterImage(img,offset,0,offset+dimg[2],dimg[1])
+  offset<-offset+dimg[2]  }}
+
+afficher_carte(readPNG('data/cartes/litho.png'))
+```
+
+**Synthèse par classe lithologique** :
+
+```{r,}
+table_litho_densite_pe %>%
+  kbl() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), font_size = 12) 
+```
+Les densités "hors marais" sont calculées en déduisant de la superficie du territoire considérée, la superficie retenue en zone de marais.
+
+**Points de vigilance** : La classe lithologique des « ophiolites » concerne seulement 0,1% de la zone d’étude, et le cumul des classes « Basaltes et Rhyolithes », « Micaschistes » et « Sables » n’atteint pas 10% de la superficie de la zone d’étude.
+ 
+## Densités de plans d'eau selon la lithologie simplifiée
+
+Nous avons apparié par jointure spatiale la lithologie simplifiée aux surfaces élémentaires de plans d'eau.
+
+Nous avons ainsi pu étudier la densité numérique de ces plans d'eau selon le type de lithologie simplifiée :
+
+```{r,}
+ggplotly(densite_numerique_pe_litho) %>%
+  config(locale = "fr")
+```
+
+Ainsi que la densité surfacique de ces plans d'eau selon la lithologie simplifiée :
+
+```{r,}
+ggplotly(densite_surfacique_pe_litho) %>%
+  config(locale = "fr")
+```
+
+La classe lithologique dont les densités sont les plus fortes est le Sable. Toutefois, nous pouvons ici percevoir l'influence des zones de marais, dont le nombre de surfaces élémentaires est très important.
+
+Nous avons donc recalculé ces densités, sans les surfaces élémentaires de plans d'eau situées en zone de marais (ni les mares) : 
+
+```{r,}
+ggplotly(densite_numerique_pehm_hors_mares_litho) %>%
+  config(locale = "fr")
+```
+
+De même pour la densité surfacique :
+
+```{r,}
+ggplotly(densite_surfacique_pehm_hors_mares_litho) %>%
+  config(locale = "fr")
+```
+
+Il ne semble pas y avoir d’implantation préférentielle des plans d’eau en fonction de la lithologie.
+
+## Superficie selon la lithologie
+
+Nous avons écarté ici les mares et les marais pour étudier plus spécifiquement la répartition de la superficie des plans d'eau en fonction de leur lithologie.
+
+```{r,}
+ggplotly(violin_surface_pehm_litho2) %>%
+  config(locale = "fr")
+```
+
+Les caractéristiques de superficie des surfaces élémentaires de plans d'eau ne semblent pas corrélées aux classes lithologiques.
+
+## Persistance selon la lithologie
+
+Nous avons enfin observé la proportion des types de persistance des surfaces élémentaires de plans d'eau en fonction des classes de lithologie simplifiée : 
+
+```{r,}
+ggplotly(repartition_pe_litho_persistance) %>%
+  config(locale = "fr")
+```
+
+Ce résultat montre une forte proportion de plans d’eau intermittents dans la classe lithologique "Sables", vraisemblablement liée aux zones de marais sur sable (cf. analyses précédentes).
+
+# Implantation des surfaces élémentaires de plans d'eau et types de masse d'eau 
+
+## Types de masses d'eau de la zone d'étude
+
+```{r,}
+afficher_carte<-function(...){
+  imageList<-list(...) ;   totalWidth<-0 ;   maxHeight<-0 ;   
+  for (img in imageList){    if(is.character(img)) img<-readPNG(img) ;  dimg<-dim(img) ;  totalWidth<-totalWidth+dimg[2] ;   maxHeight<-max(maxHeight,dimg[1])  }
+  par(mar=c(0,0,0,0)) ;   plot(c(0,totalWidth),c(0,maxHeight),type="n",asp=1,xaxt="n",yaxt="n",xlab="x",ylab="y") ;   offset<-0 ; 
+  for (img in imageList){    dimg<-dim(img) ;    rasterImage(img,offset,0,offset+dimg[2],dimg[1])
+  offset<-offset+dimg[2]  }}
+
+afficher_carte(readPNG('data/cartes/type_masse_deau.png'))
+```
+
+Ce chapitre présente une série d’analyses à l’échelle des masses d’eau, desquelles ont été exclues les masses d’eau plans d’eau :
+
+```{r,}
+table_bv_me_type %>%
+  kbl() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), font_size = 12)
+```
+Les densités "hors marais" sont calculées en déduisant de la superficie du territoire considérée, la superficie retenue en zone de marais.
+
+## Densités de plans d'eau en fonction du type de masses d'eau
+
+Nous avons ici étudié les densités de plans d'eau en fonction des types de masses d'eau :
+
+```{r,}
+ggplotly(densite_numerique_pe_type) %>%
+  config(locale = "fr")
+```
+
+On relève ici encore l'influence des secteurs de marais en zone côtière. 
+
+En effet, les marais, fortement équipés en plans d’eau, font augmenter la densité de plans d’eau des masses d’eau côtières. Ce biais est atténué dès lors qu’on retire les zones de marais de l’analyse.  En se limitant aux plans d'eau hors mares et marais :
+
+```{r,}
+ggplotly(densite_numerique_pehm_type) %>%
+  config(locale = "fr")
+```
+
+L’analyse de la densité numérique de plans d’eau en fonction du type de masse d’eau, en l’absence des mares et des marais, indique qu’il y a relativement plus de plans d’eau en masses d’eau “Cours d’eau” qu’en masses d’eau côtières ou de transition  
+
+## Persistance selon le type de masse d'eau
+
+Nous avons enfin observé la proportion des types de persistance des surfaces élémentaires de plans d'eau en fonction des types de masses d'eau : 
+
+```{r,}
+ggplotly(repartition_pe_me_persistance) %>%
+  config(locale = "fr")
+```
+
+Ce résultat montre une très forte proportion de plans d’eau intermittents dans les masses d’eau côtières, vraisemblablement liée aux zones de marais sur sable (cf. analyses précédentes).
+
+# Implantation des surfaces élémentaires de plans d'eau et Hydro-Eco-Régions (HER)
+
+## Les HER de niveau 2 de la zone d'étude
+
+```{r,}
+afficher_carte<-function(...){
+  imageList<-list(...) ;   totalWidth<-0 ;   maxHeight<-0 ;   
+  for (img in imageList){    if(is.character(img)) img<-readPNG(img) ;  dimg<-dim(img) ;  totalWidth<-totalWidth+dimg[2] ;   maxHeight<-max(maxHeight,dimg[1])  }
+  par(mar=c(0,0,0,0)) ;   plot(c(0,totalWidth),c(0,maxHeight),type="n",asp=1,xaxt="n",yaxt="n",xlab="x",ylab="y") ;   offset<-0 ; 
+  for (img in imageList){    dimg<-dim(img) ;    rasterImage(img,offset,0,offset+dimg[2],dimg[1])
+  offset<-offset+dimg[2]  }}
+
+afficher_carte(readPNG('data/cartes/her.png'))
+```
+
+```{r,}
+table_her_densite_pe %>%
+  kbl() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), font_size = 12)
+```
+MA = Massif Armoricain et TC = Tables calcaires.
+Les densités "hors marais" sont calculées en déduisant de la superficie du territoire considérée, la superficie retenue en zone de marais.
+
+## Densités de plans d'eau en fonction des HER
+
+Nous avons ici étudié les densités de plans d'eau en fonction des différentes HER, **pour leur partie contenue dans la zone d'étude** :
+
+```{r,}
+ggplotly(densite_numerique_pe_her) %>%
+  config(locale = "fr")
+```
+
+En se limitant aux plans d'eau hors mares et marais :
+
+```{r,}
+ggplotly(densite_numerique_pehm_hors_mares_her) %>%
+  config(locale = "fr")
+```
+
+Et les densités surfaciques : 
+
+```{r,}
+ggplotly(densite_surfacique_pe_her) %>%
+  config(locale = "fr")
+```
+
+En limitant aux plans d'eau hors mares et marais :
+
+```{r,}
+ggplotly(densite_surfacique_pehm_hors_mares_her) %>%
+  config(locale = "fr")
+```
+
+En conclusion, cette analyse montre que quel que soit le mode de filtrage des données (avec mares & marais ou bien sans mares & marais), et quel que soit le paramètre de densité utilisé (numérique ou surfacique), les plans d’eau sont nettement plus densément implantés au sein de deux hydro-éco-régions : le Massif Armoricain – sud intérieur (plus de 2 fois supérieur à la moyenne des densités), puis en seconde position le Massif Armoricain – est intérieur.  
+
+### Superficie selon le type de HER
+
+La répartition de la superficie des surfaces élémentaires de plans d'eau, en fonction de leur HER est la suivante :
+
+```{r,}
+ggplotly(violin_surface_pe_her) %>%
+  config(locale = "fr")
+```
+
+### Persistance selon le type de HER
+
+Nous avons enfin observé la proportion des types de persistance des surfaces élémentaires de plans d'eau en fonction des types de HER : 
+
+```{r,}
+ggplotly(repartition_pe_her_persistance) %>%
+  config(locale = "fr")
+```
+
+Cette analyse ne dégage pas de différenciation particulière de persistance des plans d’eau entre les différentes hydro-éco-régions sur la zone d’étude.
+
+# L'implantation des surfaces élémentaires de plans d'eau est-elle corrélée à la "sévérité des étiages" ?
+
+Dans un premier temps, nous avons estimé ce ratio à l’échelle des bassins versants des masses d’eau, en retenant pour ce calcul le ratio entre le plus fort débit d’étiage et le plus fort débit du module des cours d’eau de la masse d’eau (soit à l’exutoire du bassin versant de la masse d’eau) (cf. 4.1 à 4.4).
+
+Dans un second temps, nous avons apparié chaque plan d’eau sur cours ou situé à moins de 10m d’un cours d’eau, avec les débits moyens QMNA5 et QA du cours d’eau correspondant, lorsque ces débits étaient disponibles (cf. 4.5).
+
+Pour plus d'informations sur les débits moyens QMNA5 et QA issus de la [Cartographie nationale consensuelle des débits moyens (modules) et des débits d’étiage (QMNA5) de l'INRAE](https://webgr.inrae.fr/outils/bases-de-donnees/carte-des-debits).
+
+## "Sévérité des étiages" (ratio q5/qa) de la zone d'étude
+
+```{r,}
+afficher_carte<-function(...){
+  imageList<-list(...) ;   totalWidth<-0 ;   maxHeight<-0 ;   
+  for (img in imageList){    if(is.character(img)) img<-readPNG(img) ;  dimg<-dim(img) ;  totalWidth<-totalWidth+dimg[2] ;   maxHeight<-max(maxHeight,dimg[1])  }
+  par(mar=c(0,0,0,0)) ;   plot(c(0,totalWidth),c(0,maxHeight),type="n",asp=1,xaxt="n",yaxt="n",xlab="x",ylab="y") ;   offset<-0 ; 
+  for (img in imageList){    dimg<-dim(img) ;    rasterImage(img,offset,0,offset+dimg[2],dimg[1])
+  offset<-offset+dimg[2]  }}
+
+afficher_carte(readPNG('data/cartes/ratio_debits.png'))
+```
+
+```{r,}
+table_bv_me_q %>%
+  kbl() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), font_size = 12)
+```
+Les densités "hors marais" sont calculées en déduisant de la superficie du territoire considérée, la superficie retenue en zone de marais.
+
+Voici la répartition des bassins versants des masses d'eau et des communes de la zone d'étude, en fonction du ratio entre leur plus fort débit d'étiage et leur plus fort débit de module (soit à l'exutoire du bassin versant pour les masses d'eau). Les résultats sont exprimés en échelle log, les territoires dont le débit de module  est nul ou dont le débit d'étiage est nul ne sont donc pas représentés ici : 
+
+```{r,}
+ggplotly(repartition_bv_rh) %>%
+  config(locale = "fr")
+```
+
+
+```{r,}
+ggplotly(repartition_com_rh) %>%
+  config(locale = "fr")
+```
+
+## Densité en plans d'eau selon la "sévérité des étiages" du bassin versant des masses d'eau
+
+### Par classes de "sévérité d'étiage"
+
+Nous avons calculé, à l'échelle du bassin versant des masses d'eau, les densités en plans d'eau en fonction de 4 principales classes de ratio de débits, à l'exutoire de ces masses d'eau  :
+
+* QMNA5 inférieur au 1/40ème du module ;
+* QMNA5 entre 1/40ème et 1/20ème du module ; 
+* QMNA5 entre 1/20ème et 1/10ème du module ; 
+* QMNA5 supérieur au 1/10ème du module. 
+
+```{r,}
+ggplotly(densite_numerique_pe_rh) %>%
+  config(locale = "fr")
+```
+
+Comparativement, sans les mares et les marais :
+
+```{r,}
+ggplotly(densite_numerique_pehm_rh) %>%
+  config(locale = "fr")
+```
+
+Nous avons également calculé les densité surfaciques :
+
+```{r,}
+ggplotly(densite_surfacique_pe_rh) %>%
+  config(locale = "fr")
+```
+
+Et de même sans les mares et les marais : 
+
+```{r,}
+ggplotly(densite_surfacique_pehm_rh) %>%
+  config(locale = "fr")
+```
+
+### Distribution des densités en plans d'eau du bassin versant des masses d'eau selon la "sévérité de leur étiage" 
+
+Il nous a paru intéressant d'approfondir la distribution des densités numériques et surfaciques en plans d'eau (hors mares et marais) du bassin-versant des masses d'eau en fonction de la sévérité de leurs étiages et d'en établir la droite de régression linéaire : 
+
+```{r,}
+ggplotly(densite_numerique_pehm_rh_bvme_logx) %>%
+  config(locale = "fr")
+```
+
+```{r,}
+ggplotly(densite_surfacique_pehm_rh_bvme_logx) %>%
+  config(locale = "fr")
+```
+
+En conclusion, cette analyse montre que, quel que soit le mode de filtrage des données (avec mares et zones de marais ou bien sans mares et zones de marais), et quel que soit le paramètre de densité utilisé (numérique ou surfacique), on observe un gradient de densité décroissant entre les masses d’eau aux étiages prononcés qui s’avèrent très densément équipées en plans d’eau, vers les masses d’eau aux étiages peu marqués moins densément occupées par les plans d’eau. 
+
+**Les masses d’eau à étiage le plus sévère (QMNA5 < 40éme module) sont 1,8 à 3 fois plus équipées en plans d’eau que les masses d’eau à étiage le moins marqué (QMNA5 > 10ème module).**
+
+### Lien de corrélation statistique
+
+Une analyse statistique du lien de corrélation entre la densité numérique en plans d'eau (hors mares et marais) et le ratio de débit (étiage et module) à l'exutoire du bassin versant des masses d'eau montre (pour les masses d'eau de type cours d'eau, dont la distance de cook est inférieure à 4/n) que :
+
+* **"p-value" < 2.2e-16**
+* **"R² ajusté" = 0.1037**
+
+**Il existe donc un lien significatif, de relation inverse, entre le ratio de débit et la densité numérique de plans d'eau : les bassins versant des masses d'eau dans lesquels les étiages sont les plus "sévères" sont également ceux qui statistiquement ont les densités numériques de plan d'eau les plus fortes.**
+
+Voici dans les documents suivants, les détails de ce calcul statistique :
+
+```{r,}
+plot(mod1)
+```
+
+```{r,}
+summary(mod2)
+```
+
+## Superficie des surfaces élémentaires de plans d'eau en fonction de la "sévérité des étiages" du bassin versant des masses d'eau
+
+Pour les calculs suivants, nous avons apparié **le ratio de débit à l'exutoire du bassin versant de la masse d'eau** à l'ensemble des surfaces élémentaires de plan d'eau qu'elle comporte, afin de pouvoir étudier leurs superficies selon la sévérité des étiages de la masse d'eau. 
+
+```{r,}
+ggplotly(violin_surface_pe_ratio) %>%
+  config(locale = "fr")
+```
+
+Les superficies moyennes et médianes des plans d’eau, tendent à être plus importantes pour les masses d’eau à étiage les plus sévères comparées à celles des masses d’eau dont les étiages sont les moins marqués. 
+
+## Persistance et "sévérité de l'étiage" du bassin versant de la masse d'eau
+
+Nous avons enfin observé la proportion des types de persistance des surfaces élémentaires de plans d'eau en fonction de la "sévérité de l'étiage" du bassin versant de la masse d'eau : 
+
+```{r,}
+ggplotly(repartition_pe_q_persistance) %>%
+  config(locale = "fr")
+```
+
+Aucune corrélation ne semble se dégager entre persistance des plans d’eau et ratio de débits à l’échelle des masses d’eau de la zone d’étude.
+
+## Répartition des plans d'eau selon la "sévérité de l'étiage" au droit du plan d'eau
+
+Voici maintenant la répartition des **surfaces élémentaires de plans d'eau ayant pu bénéficier d'un appariement de valeurs de débits**, en fonction de leur ratio Q5/Module. 
+
+Pour rappel, il s’agit uniquement des surfaces élémentaires de plans d’eau connectées au réseau hydrographique (connexion nappe, source ou cours d’eau) et situées à moins de 10m d’un tronçon de cours d’eau bénéficiant de valeurs de débits (dont une valeur de module non nulle).
+
+L’échantillon comporte `r nrow(pe_q) %>% format(scientific=FALSE, big.mark=" ")` surfaces élémentaires de plans d’eau (sur `r nrow(pe_intercept) %>% format(scientific=FALSE, big.mark=" ")` considérées comme connectées), auxquelles il faut enlever `r nrow(pe_qa_q5_nul) %>% format(scientific=FALSE, big.mark=" ")` surfaces élémentaires de plans d’eau au droit desquelles le cours d’eau présente un QA moyen ou un débit d'étiage égal à zéro.
+
+```{r,}
+ggplotly(repartition_pe_rh) %>%
+  config(locale = "fr")
+```
+
+En écartant les mares et les marais :
+
+```{r,}
+ggplotly(repartition_pehm_rh) %>%
+  config(locale = "fr")
+```
+
+Parmi `r nrow(pe_q) %>% format(scientific=FALSE, big.mark=" ")` plans d’eau connectés ayant pu bénéficier d’un appariement de débit de cours d’eau (dont `r nrow(pe_q_mares_marais) %>% format(scientific=FALSE, big.mark=" ")` mares et marais) :
+
+* `r round(nrow(pe_q_q5_nul)*100/nrow(pe_q))`% (soit `r nrow(pe_q_q5_nul) %>% format(scientific=FALSE, big.mark=" ")` plans d’eau) présentent un débit d'étiage nul (non représentés sur les précédents graphiques) ;
+
+* `r round(nrow(pe_q_qa_nul)*100/nrow(pe_q))`% (soit `r nrow(pe_q_qa_nul) %>% format(scientific=FALSE, big.mark=" ")` plans d’eau) présentent un débit de module nul (non représentés sur les précédents graphiques) ;
+
+* `r round(nrow(pe_q_inf40)*100/nrow(pe_q))`% (soit `r nrow(pe_q_inf40) %>% format(scientific=FALSE, big.mark=" ")` plans d’eau) présentent un débit d'étiage inférieur au 1/40ème du débit du module ;
+
+* `r round(nrow(pe_q_40_20)*100/nrow(pe_q))`% (soit `r nrow(pe_q_40_20)` plans d’eau) un débit d'étiage entre le 40ème et le 20ème du débit du module ;
+
+* `r round(nrow(pe_q_20_10)*100/nrow(pe_q))`% (soit `r nrow(pe_q_20_10) %>% format(scientific=FALSE, big.mark=" ")` plans d’eau) un débit d'étiage entre le 20ème et le 10ème du débit du module ;
+
+* `r round(nrow(pe_q_sup10)*100/nrow(pe_q))`% (soit `r nrow(pe_q_sup10) %>% format(scientific=FALSE, big.mark=" ")` plans d’eau) un débit d'étiage supérieur au 10ème du débit du module. 
+
+**Enfin, `r round(nrow(pe_q_inf1)*100/nrow(pe_q))`% de ces plans d’eau (soit `r nrow(pe_q_inf1) %>% format(scientific=FALSE, big.mark=" ")` plans d’eau) sont alimentés par des cours d’eau où le QMNA5 estimé est inférieur ou égal à 1l/s, c’est-à-dire des cours d’eau probablement intermittents. **
+
+La répartition par percentile des surfaces élémentaires de plans d'eau de la zone d'étude (ayant pu bénéficier d'un appariement de valeurs de débits), en fonction de la 'sévérité de leurs étiages', est la suivante : 
+
+```{r,}
+percentiles_severite_etiages%>%
+  as.data.frame() %>%
+  kbl() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), font_size = 12) 
+```
+
+# Pour aller plus loin ...{#pour-aller_plus-loin}
+
+Différentes ressources sont accessibles depuis la [plateforme de diffusion des données de l'OFB](https://data.ofb.fr/catalogue/Donnees-geographiques-OFB/fre/catalog.search#/home) ...
+
+## Un document de présentation et cadre d'usage de l'étude
+
+Un [**document de présentation des objectifs et de la notice d'usage**](https://data.ofb.fr/catalogue/Donnees-geographiques-OFB/api/records/1f460b9f-b3bf-46bb-b4a4-f5a5572a9d1f/attachments/document_presentation_etude_plan_deau_202411.pdf) de "l'étude de la pression des plans d’eau sur les milieux aquatiques en Bretagne et Pays de la Loire".
+
+## Un projet SIG sur Qgis
+
+Un [**projet SIG proposant une mise en forme valorisée de la donnée**](https://data.ofb.fr/catalogue/Donnees-geographiques-OFB/api/records/1f460b9f-b3bf-46bb-b4a4-f5a5572a9d1f/attachments/projet_qgis_etude_plan_deau_flux_20241127.zip) permet de restituer la production des différents indicateurs aux différentes échelles de territoires
+
+## Des données géographiques accessibles en flux  
+
+Les trois principales données géographiques élaborées dans le cadre de l'étude ainsi que leurs métadonnées : 
+
+* [**Surfaces élémentaires de plans d'eau**](https://data.ofb.fr/catalogue/Donnees-geographiques-OFB/fre/catalog.search#/metadata/1f460b9f-b3bf-46bb-b4a4-f5a5572a9d1f) - [**Métadonnées**](https://data.ofb.fr/catalogue/Donnees-geographiques-OFB/api/records/1f460b9f-b3bf-46bb-b4a4-f5a5572a9d1f/attachments/pe_qualifies_20240220_metadonnees.xlsx)
+
+* [**Indicateurs "pression plans d'eau" des bassins versant des masses d'eau**](https://data.ofb.fr/catalogue/Donnees-geographiques-OFB/fre/catalog.search#/metadata/4f59b55e-edb4-4b15-a08f-312465b477fa) - [**Métadonnées**](https://data.ofb.fr/catalogue/Donnees-geographiques-OFB/api/records/4f59b55e-edb4-4b15-a08f-312465b477fa/attachments/bv_me_surface_qualifies_20240220_metadonnees.xlsx)
+  
+* [**Indicateurs "pression plans d'eau" des communes**](https://data.ofb.fr/catalogue/Donnees-geographiques-OFB/fre/catalog.search#/metadata/29032f07-bfe3-4b0b-957c-45ac19218107) - [**Métadonnées**](https://data.ofb.fr/catalogue/Donnees-geographiques-OFB/api/records/29032f07-bfe3-4b0b-957c-45ac19218107/attachments/communes_qualifiees_20240220_metadonnees.xlsx)
+
+## Un atlas cartographique de la pression plan d'eau
+
+Un **atlas cartographique** de l'étude a également été publié aux différentes échelles de territoires, mais n’est pour le moment pas accessible sur un dépôt public en raison de son volume, une solution est à l’étude.
+
+Dans l’attente, il est donc diffusé, à la demande, à l’échelle du territoire d’intérêt :
+
+* **Hélène ANQUETIL** : <helene.anquetil@ofb.gouv.fr>
+
+* **Josselin BARRY** : <josselin.barry@ofb.gouv.fr>
+
+## Des données de synthèse
+
+Un tableur de [**synthèse des indicateurs et densités numériques par territoire**](https://data.ofb.fr/catalogue/Donnees-geographiques-OFB/api/records/1f460b9f-b3bf-46bb-b4a4-f5a5572a9d1f/attachments/synthese_indicateurs_territoires_20241023.xls) permet de consulter rapidement les principaux indicateurs de dénombrement et de densités numériques de surfaces élémentaires de plans d'eau aux différentes échelles de territoire.
+
+## Une plateforme Github
+
+Cette étude a été réalisée à l’aide des logiciels Qgis et R.
+Le [projet R réalisé pour cette étude](https://github.com/josselinbarry/etude_plan_deau_bzh_pdl) est accessible depuis github.
+
+  
